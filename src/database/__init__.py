@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from sqlalchemy.orm import Session
 from .models import create_database_engine, create_tables, get_session_maker, Base
+from .violations import ViolationReporter, generate_violation_report
 
 
 class DatabaseManager:

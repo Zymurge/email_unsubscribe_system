@@ -63,6 +63,8 @@ class EmailMessage(Base):
         Index('idx_sender_email', 'sender_email'),
         Index('idx_date_sent', 'date_sent'),
         Index('idx_unsubscribe_flags', 'has_unsubscribe_header', 'has_unsubscribe_link'),
+        # Index for UID queries during deduplication
+        Index('idx_account_folder_uid', 'account_id', 'folder', 'uid'),
     )
 
     def __repr__(self):
@@ -89,6 +91,13 @@ class Subscription(Base):
     last_seen = Column(DateTime, default=func.now())
     email_count = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
+    # Unsubscribe tracking fields
+    unsubscribe_status = Column(String(50), default='active')  # active, unsubscribed, failed, unknown
+    unsubscribed_at = Column(DateTime)  # When successfully unsubscribed
+    # Violation tracking
+    emails_after_unsubscribe = Column(Integer, default=0)  # Count of emails received after unsubscribe
+    last_violation_at = Column(DateTime)  # Most recent email received after unsubscribe
+    violation_count = Column(Integer, default=0)  # Total violation incidents
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
@@ -102,10 +111,40 @@ class Subscription(Base):
         Index('idx_sender_domain', 'sender_domain'),
         Index('idx_category', 'category'),
         Index('idx_active_subs', 'is_active', 'confidence_score'),
+        Index('idx_unsubscribe_status', 'unsubscribe_status'),
+        Index('idx_violations', 'violation_count', 'last_violation_at'),
+        Index('idx_unsubscribed_subs', 'unsubscribe_status', 'unsubscribed_at'),
+        # Unique constraint to prevent duplicate subscriptions per account/sender
+        Index('uq_account_sender_subscription', 'account_id', 'sender_email', unique=True),
     )
 
+    def has_violations(self) -> bool:
+        """Check if this subscription has unsubscribe violations."""
+        return (self.unsubscribe_status == 'unsubscribed' and 
+                self.emails_after_unsubscribe > 0)
+    
+    def is_violation_email(self, email_date: datetime) -> bool:
+        """Check if an email date represents a violation."""
+        return (self.unsubscribe_status == 'unsubscribed' and 
+                self.unsubscribed_at is not None and 
+                email_date > self.unsubscribed_at)
+    
+    def record_violation(self, email_date: datetime):
+        """Record a new unsubscribe violation."""
+        if self.is_violation_email(email_date):
+            self.emails_after_unsubscribe += 1
+            self.violation_count += 1
+            if self.last_violation_at is None or email_date > self.last_violation_at:
+                self.last_violation_at = email_date
+    
+    def mark_unsubscribed(self, unsubscribe_date: datetime = None):
+        """Mark subscription as successfully unsubscribed."""
+        self.unsubscribe_status = 'unsubscribed'
+        self.unsubscribed_at = unsubscribe_date or func.now()
+        self.is_active = False
+
     def __repr__(self):
-        return f"<Subscription(sender='{self.sender_email}', category='{self.category}')>"
+        return f"<Subscription(sender='{self.sender_email}', category='{self.category}', status='{self.unsubscribe_status}')>"
 
 
 class UnsubscribeAttempt(Base):
