@@ -112,8 +112,7 @@ class EmailScanner:
                 message_uids = imap.search_messages(search_criteria, limit)
                 print(f"Found {len(message_uids)} messages to process")
                 
-                # Get existing message IDs to avoid duplicates
-                existing_uids = set()
+                # Get existing message UIDs to avoid duplicates
                 existing_messages = session.query(EmailMessage.uid).filter(
                     and_(
                         EmailMessage.account_id == account_id,
