@@ -91,6 +91,8 @@ class Subscription(Base):
     last_seen = Column(DateTime, default=func.now())
     email_count = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
+    # User preference fields
+    keep_subscription = Column(Boolean, default=False)  # True if user wants to stay subscribed (skip unsubscribe)
     # Unsubscribe tracking fields
     unsubscribe_status = Column(String(50), default='active')  # active, unsubscribed, failed, unknown
     unsubscribed_at = Column(DateTime)  # When successfully unsubscribed
@@ -114,6 +116,8 @@ class Subscription(Base):
         Index('idx_unsubscribe_status', 'unsubscribe_status'),
         Index('idx_violations', 'violation_count', 'last_violation_at'),
         Index('idx_unsubscribed_subs', 'unsubscribe_status', 'unsubscribed_at'),
+        Index('idx_keep_subscription', 'keep_subscription'),  # For filtering subscriptions to keep
+        Index('idx_unsubscribe_candidates', 'keep_subscription', 'unsubscribe_status'),  # For finding unsubscribe candidates
         # Unique constraint to prevent duplicate subscriptions per account/sender
         Index('uq_account_sender_subscription', 'account_id', 'sender_email', unique=True),
     )
@@ -142,6 +146,20 @@ class Subscription(Base):
         self.unsubscribe_status = 'unsubscribed'
         self.unsubscribed_at = unsubscribe_date or func.now()
         self.is_active = False
+    
+    def should_skip_unsubscribe(self) -> bool:
+        """Check if this subscription should be skipped for unsubscribe processing.
+        
+        Returns True if:
+        - User marked to keep subscription (keep_subscription=True)
+        - Already unsubscribed
+        """
+        return (self.keep_subscription or 
+                self.unsubscribe_status == 'unsubscribed')
+    
+    def mark_keep_subscription(self, keep: bool = True):
+        """Mark subscription to keep (user wants to stay subscribed)."""
+        self.keep_subscription = keep
 
     def __repr__(self):
         return f"<Subscription(sender='{self.sender_email}', category='{self.category}', status='{self.unsubscribe_status}')>"

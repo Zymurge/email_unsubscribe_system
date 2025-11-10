@@ -112,7 +112,7 @@ py main.py detect-subscriptions 1    # Detect subscriptions for account ID 1
 py main.py violations 1              # View unsubscribe violations for account ID 1
 ```
 
-## Database Schema
+### Database Schema
 
 The system uses SQLite with the following main tables:
 
@@ -123,6 +123,7 @@ The system uses SQLite with the following main tables:
   - Marketing keyword detection
   - Unsubscribe status and violation monitoring
   - Email count and date tracking
+  - **keep_subscription flag**: Users can mark subscriptions to keep (skip unsubscribe)
 - **unsubscribe_attempts**: Tracking of unsubscribe operations (Phase 3)
 
 ## Supported Email Providers
