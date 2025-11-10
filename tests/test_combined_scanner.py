@@ -71,7 +71,7 @@ class TestCombinedEmailScanner:
         )
 
         # Mock the validator to return safe
-        self.scanner.unsubscribe_validator.validate_url = Mock(
+        self.scanner.unsubscribe_validator.validate_safety = Mock(
             return_value={'is_safe': True, 'warnings': []}
         )
 

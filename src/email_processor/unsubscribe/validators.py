@@ -34,40 +34,58 @@ class UnsubscribeSafetyValidator:
         warnings = []
         is_safe = True
         
-        # Check HTTPS requirement
-        if REQUIRE_HTTPS and not url.startswith('https://') and not url.startswith('mailto:'):
-            warnings.append('Insecure connection - HTTP instead of HTTPS')
-            is_safe = False
+        # Basic validation first
+        if not url or not isinstance(url, str):
+            return {
+                'is_safe': False,
+                'warnings': ['Invalid or empty URL'],
+                'warning': 'Invalid or empty URL'
+            }
         
-        # Check for suspicious patterns
-        url_lower = url.lower()
-        for pattern in self.suspicious_patterns:
-            if pattern in url_lower:
-                warnings.append(f'Suspicious pattern detected: {pattern}')
+        try:
+            # Check HTTPS requirement
+            if REQUIRE_HTTPS and not url.startswith('https://') and not url.startswith('mailto:'):
+                warnings.append('Insecure connection - HTTP instead of HTTPS')
                 is_safe = False
-        
-        # Check for URL shorteners (exact domain match)
-        parsed = urllib.parse.urlparse(url)
-        domain = parsed.netloc.lower()
-        if domain in self.url_shorteners or any(domain.endswith('.' + shortener) for shortener in self.url_shorteners):
-            warnings.append('URL shortener detected - potential security risk')
-            is_safe = False
-        
-        # Check for suspicious parameters
-        if self._has_suspicious_parameters(url):
-            warnings.append('Suspicious parameters detected')
-            is_safe = False
-        
-        # Check URL structure
-        if not self._is_well_formed_url(url):
-            warnings.append('Malformed or incomplete URL')
-            is_safe = False
-        
-        return {
-            'is_safe': is_safe,
-            'warnings': warnings,
-            'warning': '; '.join(warnings) if warnings else None
-        }
+            
+            # Check for suspicious patterns
+            url_lower = url.lower()
+            for pattern in self.suspicious_patterns:
+                if pattern in url_lower:
+                    warnings.append(f'Suspicious pattern detected: {pattern}')
+                    is_safe = False
+            
+            # Check for URL shorteners (exact domain match)
+            parsed = urllib.parse.urlparse(url)
+            domain = parsed.netloc.lower()
+            if domain in self.url_shorteners or any(domain.endswith('.' + shortener) for shortener in self.url_shorteners):
+                warnings.append('URL shortener detected - potential security risk')
+                is_safe = False
+            
+            # Check for suspicious parameters
+            if self._has_suspicious_parameters(url):
+                warnings.append('Suspicious parameters detected')
+                is_safe = False
+            
+            # Check URL structure
+            if not self._is_well_formed_url(url):
+                warnings.append('Malformed or incomplete URL')
+                is_safe = False
+            
+            return {
+                'is_safe': is_safe,
+                'warnings': warnings,
+                'warning': '; '.join(warnings) if warnings else None
+            }
+            
+        except Exception as e:
+            # Handle URL parsing errors (including IPv6 issues)
+            self.logger.error(f"Error validating URL {url}: {e}")
+            return {
+                'is_safe': False,
+                'warnings': [f'URL parsing error: {str(e)}'],
+                'warning': f'URL parsing error: {str(e)}'
+            }
     
     def is_safe_domain(self, url: str) -> bool:
         """Check if domain is considered safe (legacy method - now always checks patterns)."""

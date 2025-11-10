@@ -102,6 +102,8 @@ class CombinedEmailScanner:
             # Search for messages
             message_uids = imap.search_messages(search_criteria, limit)
             logger.info(f"Found {len(message_uids)} messages to process")
+            logger.debug(f"Search criteria: {search_criteria}")
+            logger.debug(f"Message UIDs: {message_uids[:10] if len(message_uids) > 10 else message_uids}")
             
             # Get existing message UIDs to avoid duplicates
             existing_messages = self.session.query(EmailMessage.uid).filter(
@@ -115,6 +117,9 @@ class CombinedEmailScanner:
             # Filter out already processed messages
             new_uids = [uid for uid in message_uids if uid not in existing_uids]
             logger.info(f"Processing {len(new_uids)} new messages")
+            logger.debug(f"Found UIDs: {message_uids[:10] if len(message_uids) > 10 else message_uids}")
+            logger.debug(f"Existing UIDs: {len(existing_uids)} ({list(existing_uids)[:10] if len(existing_uids) > 10 else list(existing_uids)})")
+            logger.debug(f"New UIDs: {new_uids[:10] if len(new_uids) > 10 else new_uids}")
             
             # Process messages with combined analysis
             results = self._process_messages_with_analysis(
@@ -296,10 +301,14 @@ class CombinedEmailScanner:
                     # Classify the method using headers for context
                     classified = self.unsubscribe_classifier.classify_method(link, headers, html_content)
                     if classified and classified.get('url'):
-                        # Validate safety
-                        validation = self.unsubscribe_validator.validate_url(classified['url'])
-                        if validation.get('is_safe', False):
-                            classified_methods.append(classified)
+                        try:
+                            # Validate safety
+                            validation = self.unsubscribe_validator.validate_safety(classified['url'])
+                            if validation.get('is_safe', False):
+                                classified_methods.append(classified)
+                        except Exception as e:
+                            logger.error(f"Error validating URL {classified.get('url')}: {e}")
+                            # Skip this method but continue processing
                 
                 analysis['unsubscribe_methods'] = classified_methods
                 
