@@ -15,8 +15,8 @@ from .imap_client import IMAPConnection, get_imap_settings
 class EmailScanner:
     """Scans email accounts and stores messages in the database."""
     
-    def __init__(self, database_url: str = None):
-        self.db_manager = get_db_manager(database_url)
+    def __init__(self, session: Session):
+        self.session = session
         
     def add_account(self, email_address: str, password: str, provider: str = None) -> Optional[Account]:
         """Add a new email account to the database."""
@@ -48,30 +48,29 @@ class EmailScanner:
                 return None
                 
         # Store account in database
-        with self.db_manager.get_session() as session:
-            # Check if account already exists
-            existing = session.query(Account).filter(
-                Account.email_address == email_address.lower()
-            ).first()
+        # Check if account already exists
+        existing = self.session.query(Account).filter(
+            Account.email_address == email_address.lower()
+        ).first()
+        
+        if existing:
+            print(f"Account {email_address} already exists")
+            return existing
             
-            if existing:
-                print(f"Account {email_address} already exists")
-                return existing
-                
-            account = Account(
-                email_address=email_address.lower(),
-                provider=provider,
-                imap_server=imap_settings['server'],
-                imap_port=imap_settings['port'],
-                use_ssl=imap_settings['use_ssl']
-            )
-            
-            session.add(account)
-            session.commit()
-            session.refresh(account)
-            
-            print(f"Added account: {email_address}")
-            return account
+        account = Account(
+            email_address=email_address.lower(),
+            provider=provider,
+            imap_server=imap_settings['server'],
+            imap_port=imap_settings['port'],
+            use_ssl=imap_settings['use_ssl']
+        )
+        
+        self.session.add(account)
+        self.session.commit()
+        self.session.refresh(account)
+        
+        print(f"Added account: {email_address}")
+        return account
             
     def scan_account(
         self, 
@@ -83,17 +82,16 @@ class EmailScanner:
     ) -> Dict[str, int]:
         """Scan an email account for new messages."""
         
-        with self.db_manager.get_session() as session:
-            account = session.query(Account).get(account_id)
-            if not account:
-                raise ValueError(f"Account {account_id} not found")
-                
-            # Connect to IMAP
-            with IMAPConnection(
-                account.imap_server, 
-                account.imap_port, 
-                account.use_ssl
-            ) as imap:
+        account = self.session.query(Account).get(account_id)
+        if not account:
+            raise ValueError(f"Account {account_id} not found")
+            
+        # Connect to IMAP
+        with IMAPConnection(
+            account.imap_server, 
+            account.imap_port, 
+            account.use_ssl
+        ) as imap:
                 if not imap.connect(account.email_address, password):
                     raise ConnectionError(f"Failed to connect to {account.email_address}")
                     
@@ -113,7 +111,7 @@ class EmailScanner:
                 print(f"Found {len(message_uids)} messages to process")
                 
                 # Get existing message UIDs to avoid duplicates
-                existing_messages = session.query(EmailMessage.uid).filter(
+                existing_messages = self.session.query(EmailMessage.uid).filter(
                     and_(
                         EmailMessage.account_id == account_id,
                         EmailMessage.folder == folder
@@ -164,14 +162,14 @@ class EmailScanner:
                             
                     # Save batch to database
                     if batch_messages:
-                        session.add_all(batch_messages)
-                        session.commit()
+                        self.session.add_all(batch_messages)
+                        self.session.commit()
                         
                     print(f"Processed batch: {len(batch_messages)} messages")
                     
                 # Update account last scan time
                 account.last_scan = datetime.now()
-                session.commit()
+                self.session.commit()
                 
                 return {
                     'processed': processed,
@@ -200,43 +198,41 @@ class EmailScanner:
         
     def get_accounts(self) -> List[Dict[str, Any]]:
         """Get all accounts from the database."""
-        with self.db_manager.get_session() as session:
-            accounts = session.query(Account).all()
-            return [
-                {
-                    'id': acc.id,
-                    'email_address': acc.email_address,
-                    'provider': acc.provider,
-                    'last_scan': acc.last_scan,
-                    'message_count': len(acc.email_messages)
-                }
+        accounts = self.session.query(Account).all()
+        return [
+            {
+                'id': acc.id,
+                'email_address': acc.email_address,
+                'provider': acc.provider,
+                'last_scan': acc.last_scan,
+                'message_count': len(acc.email_messages)
+            }
                 for acc in accounts
             ]
             
     def get_account_stats(self, account_id: int) -> Dict[str, Any]:
         """Get statistics for an account."""
-        with self.db_manager.get_session() as session:
-            account = session.query(Account).get(account_id)
-            if not account:
-                return {}
-                
-            total_messages = session.query(EmailMessage).filter(
-                EmailMessage.account_id == account_id
-            ).count()
+        account = self.session.query(Account).get(account_id)
+        if not account:
+            return {}
             
-            messages_with_unsubscribe = session.query(EmailMessage).filter(
-                and_(
-                    EmailMessage.account_id == account_id,
-                    or_(
-                        EmailMessage.has_unsubscribe_header == True,
-                        EmailMessage.has_unsubscribe_link == True
-                    )
+        total_messages = self.session.query(EmailMessage).filter(
+            EmailMessage.account_id == account_id
+        ).count()
+        
+        messages_with_unsubscribe = self.session.query(EmailMessage).filter(
+            and_(
+                EmailMessage.account_id == account_id,
+                or_(
+                    EmailMessage.has_unsubscribe_header == True,
+                    EmailMessage.has_unsubscribe_link == True
                 )
-            ).count()
-            
-            # Get top senders
-            from sqlalchemy import func
-            top_senders = session.query(
+                )
+        ).count()
+        
+        # Get top senders
+        from sqlalchemy import func
+        top_senders = self.session.query(
                 EmailMessage.sender_email,
                 func.count(EmailMessage.id).label('count')
             ).filter(
@@ -245,18 +241,18 @@ class EmailScanner:
                 EmailMessage.sender_email
             ).order_by(
                 func.count(EmailMessage.id).desc()
-            ).limit(10).all()
-            
-            return {
-                'account': {
-                    'email': account.email_address,
-                    'provider': account.provider,
-                    'last_scan': account.last_scan
-                },
-                'total_messages': total_messages,
-                'messages_with_unsubscribe': messages_with_unsubscribe,
-                'top_senders': [
-                    {'email': sender, 'count': count} 
-                    for sender, count in top_senders
-                ]
-            }
+        ).limit(10).all()
+        
+        return {
+            'account': {
+                'email': account.email_address,
+                'provider': account.provider,
+                'last_scan': account.last_scan
+            },
+            'total_messages': total_messages,
+            'messages_with_unsubscribe': messages_with_unsubscribe,
+            'top_senders': [
+                {'email': sender, 'count': count} 
+                for sender, count in top_senders
+            ]
+        }

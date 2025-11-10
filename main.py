@@ -13,9 +13,10 @@ sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from src.config import Config, load_config_from_env_file
 from src.database import init_database
-from src.email_processor import EmailScanner
+from src.email_processor.scanner import EmailScanner
 from src.email_processor.subscription_detector import SubscriptionDetector
 from src.database.violations import ViolationReporter
+from src.cli_session import get_cli_session_manager, with_db_session
 
 
 def main():
@@ -83,7 +84,8 @@ def init_database_command():
         print(f"Error initializing database: {e}")
 
 
-def add_account_command():
+@with_db_session
+def add_account_command(session):
     """Add an email account."""
     if len(sys.argv) < 3:
         print("Usage: python main.py add-account <email>")
@@ -93,7 +95,7 @@ def add_account_command():
     password = getpass.getpass(f"Password for {email_address}: ")
     
     try:
-        scanner = EmailScanner()
+        scanner = EmailScanner(session)
         account = scanner.add_account(email_address, password)
         if account:
             print(f"Successfully added account: {account.email_address} (ID: {account.id})")
@@ -103,7 +105,8 @@ def add_account_command():
         print(f"Error adding account: {e}")
 
 
-def scan_command():
+@with_db_session
+def scan_command(session):
     """Scan an account for messages."""
     if len(sys.argv) < 3:
         print("Usage: python main.py scan <account_id> [days_back] [limit]")
@@ -114,7 +117,7 @@ def scan_command():
         days_back = int(sys.argv[3]) if len(sys.argv) > 3 else 30
         limit = int(sys.argv[4]) if len(sys.argv) > 4 else None
         
-        scanner = EmailScanner()
+        scanner = EmailScanner(session)
         
         # Get account info to prompt for password
         accounts = scanner.get_accounts()
@@ -140,10 +143,11 @@ def scan_command():
         print(f"Error scanning account: {e}")
 
 
-def list_accounts_command():
+@with_db_session
+def list_accounts_command(session):
     """List all accounts."""
     try:
-        scanner = EmailScanner()
+        scanner = EmailScanner(session)
         accounts = scanner.get_accounts()
         
         if not accounts:
@@ -163,7 +167,8 @@ def list_accounts_command():
         print(f"Error listing accounts: {e}")
 
 
-def stats_command():
+@with_db_session
+def stats_command(session):
     """Show account statistics."""
     if len(sys.argv) < 3:
         print("Usage: python main.py stats <account_id>")
@@ -171,7 +176,7 @@ def stats_command():
         
     try:
         account_id = int(sys.argv[2])
-        scanner = EmailScanner()
+        scanner = EmailScanner(session)
         stats = scanner.get_account_stats(account_id)
         
         if not stats:
@@ -196,7 +201,8 @@ def stats_command():
         print(f"Error getting stats: {e}")
 
 
-def detect_subscriptions_command():
+@with_db_session
+def detect_subscriptions_command(session):
     """Detect subscriptions for an account."""
     if len(sys.argv) < 3:
         print("Usage: python main.py detect-subscriptions <account_id>")
@@ -204,24 +210,34 @@ def detect_subscriptions_command():
         
     try:
         account_id = int(sys.argv[2])
-        detector = SubscriptionDetector()
         
         print(f"Detecting subscriptions for account {account_id}...")
-        subscriptions = detector.detect_subscriptions_from_emails(account_id)
         
-        if not subscriptions:
-            print("No subscriptions detected.")
-            return
-            
-        print(f"\nDetected {len(subscriptions)} subscriptions:")
-        print("-" * 80)
-        for sub in subscriptions:
-            print(f"From: {sub.sender_email:<40} | Confidence: {sub.confidence:3d} | Emails: {sub.email_count}")
-            if sub.domain:
-                print(f"      Domain: {sub.domain}")
-            if sub.marketing_keywords:
-                print(f"      Keywords: {', '.join(sub.marketing_keywords)}")
-            print()
+        detector = SubscriptionDetector()
+        result = detector.detect_subscriptions_from_emails(account_id, session)
+        
+        print(f"\nSubscription Detection Results:")
+        print(f"Created: {result['created']} new subscriptions")
+        print(f"Updated: {result['updated']} existing subscriptions") 
+        print(f"Skipped: {result['skipped']} emails (insufficient data)")
+        
+        # Show the detected subscriptions
+        from src.database.models import Subscription
+        subscriptions = session.query(Subscription).filter(
+            Subscription.account_id == account_id
+        ).all()
+        
+        if subscriptions:
+            print(f"\nTotal Subscriptions for Account {account_id}: {len(subscriptions)}")
+            print("-" * 80)
+            for sub in subscriptions:
+                print(f"From: {sub.sender_email:<40} | Confidence: {sub.confidence_score:3d} | Emails: {sub.email_count}")
+                if sub.sender_domain:
+                    print(f"      Domain: {sub.sender_domain}")
+                # Note: marketing_keywords is not stored in the model currently
+                print()
+        else:
+            print("No subscriptions found in database.")
             
     except ValueError:
         print("Account ID must be a number")
@@ -229,7 +245,8 @@ def detect_subscriptions_command():
         print(f"Error detecting subscriptions: {e}")
 
 
-def violations_command():
+@with_db_session
+def violations_command(session):
     """Show violation reports for an account."""
     if len(sys.argv) < 3:
         print("Usage: python main.py violations <account_id>")
@@ -237,7 +254,7 @@ def violations_command():
         
     try:
         account_id = int(sys.argv[2])
-        reporter = ViolationReporter()
+        reporter = ViolationReporter(session)
         
         # Get violation summary
         summary = reporter.get_violation_summary(account_id)
