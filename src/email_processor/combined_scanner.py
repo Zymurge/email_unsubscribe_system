@@ -286,14 +286,15 @@ class CombinedEmailScanner:
             
             # 2. Extract unsubscribe methods using our Phase 3 system
             if headers or html_content or text_content:
-                unsubscribe_methods = self.unsubscribe_extractor.extract_from_email(
+                unsubscribe_links = self.unsubscribe_extractor.extract_all_unsubscribe_methods(
                     headers, html_content, text_content
                 )
                 
-                # Classify and validate methods
+                # Classify and validate methods for each link
                 classified_methods = []
-                for method in unsubscribe_methods:
-                    classified = self.unsubscribe_classifier.classify_method(method)
+                for link in unsubscribe_links:
+                    # Classify the method using headers for context
+                    classified = self.unsubscribe_classifier.classify_method(link, headers, html_content)
                     if classified and classified.get('url'):
                         # Validate safety
                         validation = self.unsubscribe_validator.validate_url(classified['url'])
@@ -328,13 +329,16 @@ class CombinedEmailScanner:
                 analysis['debug_links_json'] = json.dumps([
                     method.get('url') for method in analysis['unsubscribe_methods']
                     if method.get('url')
-                ]) if analysis['unsubscribe_methods'] else None
+                ]) if analysis['unsubscribe_methods'] else json.dumps([])
                 
                 analysis['debug_notes'] = json.dumps(debug_info)
             
         except Exception as e:
             logger.error(f"Error in message analysis: {e}")
-            analysis['debug_notes'] = json.dumps({'error': str(e)}) if self.enable_debug_storage else None
+            if self.enable_debug_storage:
+                analysis['debug_notes'] = json.dumps({'error': str(e), 'processing_timestamp': datetime.now().isoformat()})
+            else:
+                analysis['debug_notes'] = None
         
         return analysis
     
