@@ -52,6 +52,10 @@ class EmailMessage(Base):
     has_unsubscribe_header = Column(Boolean, default=False)
     has_unsubscribe_link = Column(Boolean, default=False)
     processed_for_subscriptions = Column(Boolean, default=False)
+    # Debug storage fields for hybrid scan+analyze approach
+    unsubscribe_headers_json = Column(Text, nullable=True)  # Store relevant headers for debugging
+    unsubscribe_links_found = Column(Text, nullable=True)   # Store extracted links for debugging  
+    processing_notes = Column(Text, nullable=True)          # Debug info about processing
     created_at = Column(DateTime, default=func.now())
     
     # Relationships

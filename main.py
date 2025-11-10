@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent / 'src'))
 from src.config import Config, load_config_from_env_file
 from src.database import init_database
 from src.email_processor.scanner import EmailScanner
+from src.email_processor.combined_scanner import CombinedEmailScanner
 from src.email_processor.subscription_detector import SubscriptionDetector
 from src.database.violations import ViolationReporter
 from src.cli_session import get_cli_session_manager, with_db_session
@@ -35,6 +36,8 @@ def main():
         add_account_command()
     elif command == 'scan':
         scan_command()
+    elif command == 'scan-analyze':
+        combined_scan_command()
     elif command == 'list-accounts':
         list_accounts_command()
     elif command == 'stats':
@@ -59,18 +62,23 @@ Usage:
 Commands:
     init                         Initialize the database
     add-account <email>          Add an email account
-    scan <account_id>            Scan an account for messages
+    scan <account_id>            Scan an account for messages (basic)
+    scan-analyze <account_id>    Scan with integrated subscription detection & unsubscribe extraction
     list-accounts                List all accounts
     stats <account_id>           Show account statistics
-    detect-subscriptions <id>    Detect subscriptions for account
+    detect-subscriptions <id>    Detect subscriptions for account (legacy)
     violations <account_id>      Show violation reports for account
+
+Options:
+    --debug-storage              Store detailed extraction info (use with scan-analyze)
 
 Examples:
     python main.py init
     python main.py add-account user@comcast.net
-    python main.py scan 1
+    python main.py scan-analyze 1                    # Combined scan+analyze (recommended)
+    python main.py scan-analyze 1 --debug-storage    # With debug info storage
+    python main.py scan 1                            # Basic scan only
     python main.py stats 1
-    python main.py detect-subscriptions 1
     python main.py violations 1
     """)
 
@@ -141,6 +149,58 @@ def scan_command(session):
         print("Account ID must be a number")
     except Exception as e:
         print(f"Error scanning account: {e}")
+
+
+@with_db_session
+def combined_scan_command(session):
+    """Scan an account with integrated subscription detection and unsubscribe extraction."""
+    if len(sys.argv) < 3:
+        print("Usage: python main.py scan-analyze <account_id> [days_back] [limit] [--debug-storage]")
+        print("  --debug-storage: Store detailed extraction info for debugging")
+        return
+        
+    try:
+        account_id = int(sys.argv[2])
+        days_back = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] != '--debug-storage' else 30
+        limit = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] != '--debug-storage' else None
+        
+        # Check for debug storage flag
+        enable_debug_storage = '--debug-storage' in sys.argv
+        
+        scanner = EmailScanner(session)
+        
+        # Get account info to prompt for password
+        accounts = scanner.get_accounts()
+        account = next((a for a in accounts if a['id'] == account_id), None)
+        if not account:
+            print(f"Account {account_id} not found")
+            return
+            
+        password = getpass.getpass(f"Password for {account['email_address']}: ")
+        
+        # Create combined scanner
+        combined_scanner = CombinedEmailScanner(session, enable_debug_storage=enable_debug_storage)
+        
+        print(f"Starting combined scan+analyze for {account['email_address']} (last {days_back} days)...")
+        if enable_debug_storage:
+            print("Debug storage enabled - detailed extraction info will be saved")
+        
+        results = combined_scanner.scan_account_with_analysis(
+            account_id, password, days_back=days_back, limit=limit
+        )
+        
+        print(f"\nCombined scan+analyze complete:")
+        print(f"  Total found: {results['total_found']}")
+        print(f"  Emails processed: {results['processed_emails']}")
+        print(f"  Email errors: {results['email_errors']}")
+        print(f"  Subscriptions created: {results['subscriptions_created']}")
+        print(f"  Subscriptions updated: {results['subscriptions_updated']}")
+        print(f"  Unsubscribe methods extracted: {results['unsubscribe_methods_extracted']}")
+        
+    except ValueError:
+        print("Account ID must be a number")
+    except Exception as e:
+        print(f"Error in combined scan: {e}")
 
 
 @with_db_session
