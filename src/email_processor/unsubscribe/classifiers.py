@@ -17,10 +17,14 @@ from .constants import (
     METHOD_GET, METHOD_POST, METHOD_EMAIL, METHOD_ONE_CLICK,
     CONFIDENCE_HIGH, CONFIDENCE_MEDIUM, CONFIDENCE_LOW
 )
+from .logging import UnsubscribeLogger
 
 
 class UnsubscribeMethodClassifier:
     """Classify unsubscribe methods and extract parameters."""
+    
+    def __init__(self):
+        self.logger = UnsubscribeLogger("method_classifier")
     
     def classify_method(self, url: str, headers: Optional[Dict[str, str]] = None, 
                        form_context: Optional[str] = None) -> Dict[str, Any]:

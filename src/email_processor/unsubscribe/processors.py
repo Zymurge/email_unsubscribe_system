@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from .extractors import UnsubscribeLinkExtractor
 from .classifiers import UnsubscribeMethodClassifier
 from .validators import UnsubscribeSafetyValidator
+from .logging import UnsubscribeLogger
 from ...database.models import Subscription
 
 
@@ -26,6 +27,7 @@ class UnsubscribeProcessor:
         self.extractor = UnsubscribeLinkExtractor()
         self.classifier = UnsubscribeMethodClassifier()
         self.validator = UnsubscribeSafetyValidator()
+        self.logger = UnsubscribeLogger("unsubscribe_processor")
         
         # Method priority for single email (higher number = higher priority)
         self.method_priority = {

@@ -16,6 +16,7 @@ from .constants import (
     SUSPICIOUS_PATTERNS, URL_SHORTENERS, SUSPICIOUS_PARAMS,
     REQUIRE_HTTPS, SAFETY_SCORE_THRESHOLD
 )
+from .logging import UnsubscribeLogger
 
 
 class UnsubscribeSafetyValidator:
@@ -26,6 +27,7 @@ class UnsubscribeSafetyValidator:
         self.suspicious_patterns = SUSPICIOUS_PATTERNS
         self.url_shorteners = URL_SHORTENERS
         self.suspicious_params = SUSPICIOUS_PARAMS
+        self.logger = UnsubscribeLogger("safety_validator")
     
     def validate_safety(self, url: str) -> Dict[str, Any]:
         """Validate URL safety for unsubscribe operations."""

@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 from .constants import (
     UNSUBSCRIBE_KEYWORDS, URL_PATTERN, HEADER_URL_PATTERN, EMAIL_PATTERN
 )
+from .logging import UnsubscribeLogger
 
 
 class UnsubscribeLinkExtractor:
@@ -25,6 +26,7 @@ class UnsubscribeLinkExtractor:
         self.unsubscribe_keywords = UNSUBSCRIBE_KEYWORDS
         self.url_pattern = URL_PATTERN
         self.header_url_pattern = HEADER_URL_PATTERN
+        self.logger = UnsubscribeLogger("link_extractor")
     
     def extract_from_headers(self, headers: Dict[str, str]) -> List[str]:
         """Extract unsubscribe links from email headers.
