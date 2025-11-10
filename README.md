@@ -36,11 +36,13 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Integration with subscription detection
   - Comprehensive test coverage (7 tests)
 
-- **Phase 3 (Planned)**: Automated unsubscribing
+- **Phase 3 (Complete)**: Unsubscribe extraction and processing ✅
   - Extract and classify unsubscribe links from emails
   - Support multiple unsubscribe methods (HTTP GET/POST, email replies, one-click)
-  - Safe unsubscribe link processing with validation
+  - RFC 2369 and RFC 8058 compliance (List-Unsubscribe headers)
+  - Safe unsubscribe link processing with comprehensive security validation
   - Attempt tracking and success/failure reporting
+  - Comprehensive test coverage (27 tests)
 
 ## Installation
 
@@ -107,9 +109,47 @@ py main.py stats 1
 py main.py detect-subscriptions 1    # Detect subscriptions for account ID 1
 ```
 
+### Manage Subscriptions (New!)
+```python
+# Mark subscriptions to keep (skip unsubscribe processing)
+from src.database.models import Subscription
+
+subscription.mark_as_keep()    # Set keep_subscription=True
+subscription.unmark_as_keep()  # Set keep_subscription=False
+
+# Check if subscription should be processed
+if not subscription.should_skip_unsubscribe():
+    # Safe to process for unsubscribe
+    pass
+```
+
 ### View Violation Reports (New!)
 ```bash
 py main.py violations 1              # View unsubscribe violations for account ID 1
+```
+
+### Unsubscribe Processing (Phase 3 - New!)
+```python
+# Extract unsubscribe methods from email
+from src.email_processor.unsubscribe import UnsubscribeProcessor
+
+processor = UnsubscribeProcessor()
+result = processor.process_email_for_unsubscribe_methods(
+    headers={'List-Unsubscribe': '<https://company.com/unsubscribe?token=xyz>'},
+    html_content='<a href="https://company.com/unsubscribe?token=xyz">Unsubscribe</a>',
+    text_content=None
+)
+
+# Result contains:
+# - methods: List of all detected unsubscribe methods
+# - primary_method: Best method based on priority (one-click > POST > GET > email)
+# - total_methods: Count of methods found
+
+# Methods are classified as:
+# - 'one_click': RFC 8058 one-click unsubscribe
+# - 'http_post': POST form submission
+# - 'http_get': Simple HTTP GET request  
+# - 'email_reply': Email reply to unsubscribe address
 ```
 
 ### Database Schema
@@ -138,9 +178,10 @@ The system uses SQLite with the following main tables:
 
 ### Running Tests
 ```bash
-python -m pytest tests/                    # Run all 30 tests
+python -m pytest tests/                    # Run all 57 tests
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
 python -m pytest tests/test_step1_subscription_creation.py # Run subscription detection tests
+python -m pytest tests/test_phase3_unsubscribe_extraction.py # Run Phase 3 unsubscribe tests (27 tests)
 ```
 
 ### Project Structure
@@ -149,19 +190,31 @@ email_unsub_manager/
 ├── src/
 │   ├── config/          # Configuration management
 │   ├── database/        # Database models, management, and violation reporting
-│   │   ├── models.py    # SQLAlchemy models with violation tracking
+│   │   ├── models.py    # SQLAlchemy models with keep_subscription flag
 │   │   ├── violations.py # Violation reporting system
 │   │   └── __init__.py  # Database initialization
 │   ├── email_processor/ # Email processing and subscription detection
 │   │   ├── imap_client.py      # IMAP connection handling
 │   │   ├── scanner.py          # Email scanning and storage
-│   │   └── subscription_detector.py # Subscription detection (NEW!)
+│   │   ├── subscription_detector.py # Subscription detection
+│   │   ├── unsubscribe_processor.py # Unsubscribe attempt tracking
+│   │   └── unsubscribe/        # Unsubscribe extraction pipeline (NEW!)
+│   │       ├── __init__.py     # Clean API exports
+│   │       ├── constants.py    # Shared patterns and configuration
+│   │       ├── extractors.py   # Link extraction from headers/HTML/text
+│   │       ├── classifiers.py  # Method classification (GET/POST/email/one-click)
+│   │       ├── validators.py   # Security validation and safety checks
+│   │       └── processors.py   # Main pipeline and method management
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (30 tests)
+├── tests/               # Comprehensive test suite (57 tests)
 │   ├── test_basic.py                        # Basic functionality tests
 │   ├── test_deduplication.py               # Database constraint tests
+│   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
+│   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
 │   ├── test_step1_subscription_creation.py # Subscription detection tests
 │   └── test_violations.py                  # Violation tracking tests
+├── docs/                # Documentation
+│   └── PROCESSING_RULES.md # Detailed unsubscribe extraction rules
 ├── data/                # Database and data files (created automatically)
 ├── main.py              # CLI entry point
 └── requirements.txt     # Python dependencies
@@ -178,6 +231,12 @@ email_unsub_manager/
 
 - [x] **Phase 1**: Basic email scanning and storage ✅ **COMPLETE**
 - [x] **Phase 2**: Advanced subscription detection with confidence scoring ✅ **COMPLETE**
-- [ ] **Phase 3**: Safe automated unsubscribing (in planning)
-- [ ] **Phase 4**: Web interface and reporting
-- [ ] **Phase 5**: OAuth support for major providers
+- [x] **Phase 3**: Unsubscribe extraction and processing ✅ **COMPLETE**
+  - [x] Modular architecture with clean separation of concerns
+  - [x] RFC compliance (2369, 8058) with one-click unsubscribe support
+  - [x] Comprehensive security validation and safety checks
+  - [x] "Most recent email wins" rule for method conflicts
+  - [x] Full TDD methodology with 27 comprehensive tests
+- [ ] **Phase 4**: Automated unsubscribe execution (in planning)
+- [ ] **Phase 5**: Web interface and reporting
+- [ ] **Phase 6**: OAuth support for major providers

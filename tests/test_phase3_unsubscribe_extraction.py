@@ -20,14 +20,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from src.database.models import Account, EmailMessage, Subscription, UnsubscribeAttempt
+from src.email_processor.unsubscribe import (
+    UnsubscribeLinkExtractor, UnsubscribeMethodClassifier, 
+    UnsubscribeSafetyValidator, UnsubscribeProcessor,
+    UnsubscribeMethodUpdater, UnsubscribeMethodConflictResolver
+)
 
 
 class TestUnsubscribeLinkExtractor:
     """Test suite for extracting unsubscribe links from emails."""
     
     def test_extract_from_email_with_no_unsubscribe_methods(self):
-        """Test extraction from emails that have NO unsubscribe methods."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeLinkExtractor
+        """Test that extractor returns empty list when no unsubscribe methods are found."""
         
         extractor = UnsubscribeLinkExtractor()
         
@@ -58,7 +62,6 @@ class TestUnsubscribeLinkExtractor:
     def test_extract_from_list_unsubscribe_header(self):
         """Test extraction from List-Unsubscribe header."""
         # This will fail initially - RED phase
-        from src.email_processor.unsubscribe_extractor import UnsubscribeLinkExtractor
         
         extractor = UnsubscribeLinkExtractor()
         
@@ -79,7 +82,6 @@ class TestUnsubscribeLinkExtractor:
         
     def test_extract_from_list_unsubscribe_post_header(self):
         """Test extraction from List-Unsubscribe-Post header (RFC 8058)."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeLinkExtractor
         
         extractor = UnsubscribeLinkExtractor()
         
@@ -98,7 +100,6 @@ class TestUnsubscribeLinkExtractor:
         
     def test_extract_from_html_body(self):
         """Test extraction from HTML email body."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeLinkExtractor
         
         extractor = UnsubscribeLinkExtractor()
         
@@ -122,7 +123,6 @@ class TestUnsubscribeLinkExtractor:
         
     def test_extract_from_text_body(self):
         """Test extraction from plain text email body."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeLinkExtractor
         
         extractor = UnsubscribeLinkExtractor()
         
@@ -147,7 +147,6 @@ class TestUnsubscribeLinkExtractor:
         
     def test_filter_unsubscribe_keywords(self):
         """Test filtering links based on unsubscribe-related keywords."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeLinkExtractor
         
         extractor = UnsubscribeLinkExtractor()
         
@@ -178,7 +177,6 @@ class TestUnsubscribeMethodClassifier:
     
     def test_classify_http_get_method(self):
         """Test detection of HTTP GET unsubscribe methods."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeMethodClassifier
         
         classifier = UnsubscribeMethodClassifier()
         
@@ -194,7 +192,6 @@ class TestUnsubscribeMethodClassifier:
         
     def test_classify_http_post_method(self):
         """Test detection of HTTP POST unsubscribe methods."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeMethodClassifier
         
         classifier = UnsubscribeMethodClassifier()
         
@@ -216,7 +213,6 @@ class TestUnsubscribeMethodClassifier:
         
     def test_classify_email_reply_method(self):
         """Test detection of email reply unsubscribe methods."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeMethodClassifier
         
         classifier = UnsubscribeMethodClassifier()
         
@@ -231,7 +227,6 @@ class TestUnsubscribeMethodClassifier:
         
     def test_classify_one_click_method(self):
         """Test detection of one-click unsubscribe methods (RFC 8058)."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeMethodClassifier
         
         classifier = UnsubscribeMethodClassifier()
         
@@ -250,7 +245,6 @@ class TestUnsubscribeMethodClassifier:
         
     def test_classify_complex_scenarios(self):
         """Test classification of complex unsubscribe scenarios with edge cases."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeMethodClassifier
         
         classifier = UnsubscribeMethodClassifier()
         
@@ -294,7 +288,6 @@ class TestUnsubscribeSafetyValidator:
     
     def test_validate_legitimate_domains(self):
         """Test validation works for all legitimate subscription domains (not just 'safe' ones)."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeSafetyValidator
         
         validator = UnsubscribeSafetyValidator()
         
@@ -317,7 +310,6 @@ class TestUnsubscribeSafetyValidator:
             
     def test_validate_suspicious_patterns(self):
         """Test detection of suspicious unsubscribe patterns."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeSafetyValidator
         
         validator = UnsubscribeSafetyValidator()
         
@@ -337,7 +329,6 @@ class TestUnsubscribeSafetyValidator:
             
     def test_validate_https_requirement(self):
         """Test HTTPS requirement validation."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeSafetyValidator
         
         validator = UnsubscribeSafetyValidator()
         
@@ -354,7 +345,6 @@ class TestUnsubscribeSafetyValidator:
         
     def test_validate_parameter_safety(self):
         """Test validation of URL parameters for safety."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeSafetyValidator
         
         validator = UnsubscribeSafetyValidator()
         
@@ -375,7 +365,6 @@ class TestUnsubscribeProcessorIntegration:
     
     def test_extract_and_classify_real_email(self):
         """Test extraction and classification from a realistic email."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeProcessor
         
         processor = UnsubscribeProcessor()
         
@@ -421,7 +410,6 @@ class TestUnsubscribeProcessorIntegration:
         """Test updating subscription record with extracted unsubscribe information."""
         # This will use the database models we already have
         from src.database import DatabaseManager
-        from src.email_processor.unsubscribe_extractor import UnsubscribeProcessor
         
         # Setup in-memory database
         db_manager = DatabaseManager("sqlite:///:memory:")
@@ -555,7 +543,6 @@ class TestKeepSubscriptionFlag:
     def test_skip_unsubscribe_processing_for_kept_subscriptions(self):
         """Test that subscriptions marked as 'keep' are skipped during unsubscribe processing."""
         from src.database import DatabaseManager
-        from src.email_processor.unsubscribe_extractor import UnsubscribeProcessor
         
         db_manager = DatabaseManager("sqlite:///:memory:")
         db_manager.initialize_database()
@@ -605,7 +592,6 @@ class TestKeepSubscriptionFlag:
     def test_skip_already_unsubscribed_subscriptions(self):
         """Test that already unsubscribed subscriptions are also skipped."""
         from src.database import DatabaseManager
-        from src.email_processor.unsubscribe_extractor import UnsubscribeProcessor
         
         db_manager = DatabaseManager("sqlite:///:memory:")
         db_manager.initialize_database()
@@ -723,7 +709,6 @@ class TestMultipleUnsubscribeMethodsPerSubscription:
     
     def test_multiple_methods_same_email(self):
         """Test when a single email has multiple unsubscribe methods."""
-        from src.email_processor.unsubscribe_extractor import UnsubscribeProcessor
         
         processor = UnsubscribeProcessor()
         
@@ -760,7 +745,6 @@ class TestMultipleUnsubscribeMethodsPerSubscription:
         RULE: Most recent email wins - unsubscribe method from latest email is used.
         """
         from src.database import DatabaseManager
-        from src.email_processor.unsubscribe_extractor import UnsubscribeMethodConflictResolver
         from datetime import datetime, timedelta
         
         db_manager = DatabaseManager("sqlite:///:memory:")
@@ -813,7 +797,6 @@ class TestMultipleUnsubscribeMethodsPerSubscription:
         
         RULE: Within one email, prefer one-click > http_post > http_get > email_reply
         """
-        from src.email_processor.unsubscribe_extractor import UnsubscribeProcessor
         
         processor = UnsubscribeProcessor()
         
@@ -845,7 +828,6 @@ class TestMultipleUnsubscribeMethodsPerSubscription:
     def test_update_method_when_better_found(self):
         """Test updating subscription when a better unsubscribe method is found."""
         from src.database import DatabaseManager
-        from src.email_processor.unsubscribe_extractor import UnsubscribeMethodUpdater
         
         db_manager = DatabaseManager("sqlite:///:memory:")
         db_manager.initialize_database()
