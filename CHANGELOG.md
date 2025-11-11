@@ -99,6 +99,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - Phase 3: Unsubscribe Extraction System ✅ COMPLETE
 
+- **Secure Credential Storage System**
+  - `CredentialStore` class for managing stored email passwords
+  - JSON-based storage with restrictive file permissions (600 - owner read/write only)
+  - Automatic password lookup during scan/analyze operations
+  - Secure storage in `data/email_passwords.json` (git-ignored)
+  - 24 comprehensive tests in `test_credentials.py`
+
 - **Modular Unsubscribe Extraction Architecture**
   - Refactored monolithic code into modular package structure
   - New `src/email_processor/unsubscribe/` package with specialized modules
@@ -159,6 +166,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CLI Commands Added
 
 - `scan-and-analyze <account_id>` - Combined scan and subscription detection
+- `store-password <email>` - Store password for an email account with secure prompting
+- `remove-password <email>` - Remove stored password for an email account
+- `list-passwords` - List email accounts with stored passwords
 
 ### Planned for Future Phases
 
