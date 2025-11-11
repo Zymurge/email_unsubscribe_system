@@ -28,6 +28,28 @@ class UnsubscribeLinkExtractor:
         self.header_url_pattern = HEADER_URL_PATTERN
         self.logger = UnsubscribeLogger("link_extractor")
     
+    def _unwrap_quoted_printable_lines(self, text: str) -> str:
+        """
+        Handle quoted-printable soft line breaks in text content.
+        
+        In quoted-printable encoding, a line ending with '=' is a soft line break
+        that indicates the line continues on the next line without a space.
+        This is critical for reconstructing URLs that span multiple lines.
+        
+        Example:
+            "https://example.com/unsubscribe?id=3D\nabc123"
+            becomes "https://example.com/unsubscribe?id=3Dabc123"
+        """
+        # Remove soft line breaks (= followed by newline)
+        # This handles both \n and \r\n line endings
+        text = re.sub(r'=\r?\n', '', text)
+        
+        # Also handle the case where quoted-printable encoding uses =3D for '='
+        # This ensures URLs with encoded characters are properly reconstructed
+        text = text.replace('=3D', '=')
+        
+        return text
+    
     def extract_from_headers(self, headers: Dict[str, str]) -> List[str]:
         """Extract unsubscribe links from email headers.
         
@@ -73,8 +95,11 @@ class UnsubscribeLinkExtractor:
         """Extract links from HTML content."""
         links = []
         
+        # Unwrap quoted-printable soft line breaks before parsing
+        unwrapped_html = self._unwrap_quoted_printable_lines(html_content)
+        
         try:
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(unwrapped_html, 'html.parser')
             
             # Find all anchor tags with href
             for a_tag in soup.find_all('a', href=True):
@@ -93,7 +118,7 @@ class UnsubscribeLinkExtractor:
                     
         except Exception:
             # If HTML parsing fails, fall back to regex
-            links = self.url_pattern.findall(html_content)
+            links = self.url_pattern.findall(unwrapped_html)
         
         return links
     
@@ -101,14 +126,17 @@ class UnsubscribeLinkExtractor:
         """Extract links from plain text content."""
         links = []
         
+        # Unwrap quoted-printable soft line breaks before URL extraction
+        unwrapped_text = self._unwrap_quoted_printable_lines(text_content)
+        
         # Find all URLs
-        url_matches = self.url_pattern.findall(text_content)
+        url_matches = self.url_pattern.findall(unwrapped_text)
         links.extend(url_matches)
         
         # Find email addresses that might be unsubscribe addresses
-        email_matches = EMAIL_PATTERN.findall(text_content)
+        email_matches = EMAIL_PATTERN.findall(unwrapped_text)
         for email in email_matches:
-            email_context = self._get_email_context(text_content, email)
+            email_context = self._get_email_context(unwrapped_text, email)
             if self._is_unsubscribe_context(email_context):
                 links.append(f"mailto:{email}")
         
