@@ -90,9 +90,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned for Phase 3 - Automated Unsubscribing  
-- Safe unsubscribe link extraction and classification
-- Multiple unsubscribe methods (HTTP GET/POST, email replies, one-click)
+### In Progress
+
+- Enhanced URL extraction with quoted-printable encoding support
+- Improved combined scan+analyze workflow
+
+## [0.3.0] - 2025-11-11
+
+### Added - Phase 3: Unsubscribe Extraction System ✅ COMPLETE
+
+- **Modular Unsubscribe Extraction Architecture**
+  - Refactored monolithic code into modular package structure
+  - New `src/email_processor/unsubscribe/` package with specialized modules
+  - `extractors.py` - Link extraction from headers and body content
+  - `classifiers.py` - Unsubscribe method classification
+  - `validators.py` - Link safety validation
+  - `processors.py` - High-level processing orchestration
+  - `constants.py` - Shared configuration and patterns
+  - `types.py` - Type definitions and dataclasses
+  - `exceptions.py` - Custom exception hierarchy
+  - `logging.py` - Structured logging system
+
+- **Type Safety & Validation (Step 4.1)**
+  - Type-safe dataclasses: `UnsubscribeLink`, `UnsubscribeExtraction`
+  - Custom exception hierarchy with specific error types
+  - Comprehensive type hints throughout codebase
+  - Validation for all data structures
+
+- **Structured Logging System (Step 4.2)**
+  - `UnsubscribeLogger` with contextual logging
+  - Automatic sanitization of sensitive data (emails, tokens, passwords)
+  - Structured log format with severity levels
+  - Per-component logger instances
+
+- **Dependency Injection Architecture**
+  - Clean separation of concerns with injectable dependencies
+  - Factory pattern for component creation
+  - Improved testability with mock support
+  - Reduced coupling between modules
+
+- **Combined Scan+Analyze Workflow**
+  - `CombinedEmailScanner` integrating IMAP scanning with subscription detection
+  - Single-command workflow: `scan-and-analyze`
+  - Automatic unsubscribe link extraction during scan
+  - Efficient batch processing with unified statistics
+
+- **Quoted-Printable URL Handling**
+  - Fix for incomplete URLs from quoted-printable soft line breaks
+  - `_unwrap_quoted_printable_lines()` method to handle line-wrapped URLs
+  - Support for both `\n` and `\r\n` line endings
+  - Proper handling of `=3D` encoding for equals signs
+  - Fixes truncated URLs ending with `=` (e.g., kmail-lists.com links)
+
+### Improvements
+
+- Enhanced URL pattern matching with line unwrapping
+- Comprehensive test coverage for quoted-printable handling
+- 8 new tests in `test_quoted_printable_unwrap.py`
+- Improved email body content extraction
+- Better handling of multi-line URLs in email bodies
+
+### Fixed
+
+- Incomplete unsubscribe URLs from wrapped email content
+- URLs truncated at quoted-printable soft line breaks
+- kmail-lists.com and similar URLs being cut off mid-URL
+
+### CLI Commands Added
+
+- `scan-and-analyze <account_id>` - Combined scan and subscription detection
+
+### Planned for Future Phases
+
+- Automated unsubscribe execution (HTTP/email methods)
+- One-click unsubscribe support (RFC 8058)
 - Unsubscribe attempt tracking and success/failure reporting
 - Rate limiting and safety validation checks
 - Integration with violation tracking for effectiveness monitoring
@@ -100,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Project Development Methodology
 
 This project follows **Test-Driven Development (TDD)** practices:
+
 - **Red-Green-Refactor** cycle implementation for all new features
 - Comprehensive test specifications written before feature development
 - 30 tests covering all major functionality across multiple test suites
