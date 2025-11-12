@@ -101,7 +101,7 @@ py main.py init
 py main.py add-account user@comcast.net
 ```
 
-### Store Credentials (New!)
+### Store Credentials
 
 Store passwords securely to avoid repeated prompts:
 
@@ -138,15 +138,10 @@ py main.py list-accounts
 py main.py stats 1
 ```
 
-### Detect Subscriptions (New!)
+### Detect Subscriptions
 
 ```bash
 py main.py detect-subscriptions 1    # Detect subscriptions for account ID 1
-```
-
-### List Subscriptions (New!)
-
-```bash
 ```
 
 ### List Subscriptions
@@ -169,7 +164,7 @@ Output shows:
 - Violation count (if unsubscribed)
 - Unsubscribe method available
 
-### Unsubscribe Execution (New!)
+### Unsubscribe Execution
 
 ```bash
 # Test unsubscribe (dry-run - safe, no actual request)
@@ -200,43 +195,13 @@ py main.py unsubscribe 8 --yes
 - HTTP status code and response
 - Success/failure with detailed messages
 
-### Manage Subscriptions (New!)
-
-```python
-# Mark subscriptions to keep (skip unsubscribe processing)
-```
-```
-
-Output shows:
-
-- Subscription ID, sender email, email count
-- Keep status (✓ for kept, blank otherwise)
-- Unsubscribed status (Yes/No)
-- Violation count (if unsubscribed)
-- Unsubscribe method available
-
-### Manage Subscriptions (New!)
-
-```python
-# Mark subscriptions to keep (skip unsubscribe processing)
-from src.database.models import Subscription
-
-subscription.mark_as_keep()    # Set keep_subscription=True
-subscription.unmark_as_keep()  # Set keep_subscription=False
-
-# Check if subscription should be processed
-if not subscription.should_skip_unsubscribe():
-    # Safe to process for unsubscribe
-    pass
-```
-
-### View Violation Reports (New!)
+### View Violation Reports
 
 ```bash
 py main.py violations 1              # View unsubscribe violations for account ID 1
 ```
 
-### Unsubscribe Processing (Phase 3 - New!)
+### Unsubscribe Processing (Phase 3)
 
 ```python
 # Extract unsubscribe methods from email
@@ -288,8 +253,9 @@ The system uses SQLite with the following main tables:
 ### Running Tests
 
 ```bash
+```bash
 python -m pytest tests/                    # Run all 166 tests
-python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests - NEW!)
+python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests)
 python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests)
 python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests)
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
@@ -304,7 +270,7 @@ email_unsub_manager/
 ├── src/
 │   ├── config/          # Configuration management
 │   │   ├── settings.py       # Environment configuration
-│   │   └── credentials.py    # Secure credential storage (NEW!)
+│   │   └── credentials.py    # Secure credential storage
 │   ├── database/        # Database models, management, and violation reporting
 │   │   ├── models.py    # SQLAlchemy models with keep_subscription flag
 │   │   ├── violations.py # Violation reporting system
@@ -314,56 +280,24 @@ email_unsub_manager/
 │   │   ├── scanner.py          # Email scanning and storage
 │   │   ├── subscription_detector.py # Subscription detection
 │   │   ├── unsubscribe_processor.py # Unsubscribe attempt tracking
-│   │   └── unsubscribe/        # Unsubscribe extraction pipeline (NEW!)
+│   │   └── unsubscribe/        # Unsubscribe extraction pipeline
 │   │       ├── __init__.py     # Clean API exports
 │   │       ├── constants.py    # Shared patterns and configuration
 │   │       ├── extractors.py   # Link extraction from headers/HTML/text
 │   │       ├── classifiers.py  # Method classification (GET/POST/email/one-click)
 │   │       ├── validators.py   # Security validation and safety checks
 │   │       └── processors.py   # Main pipeline and method management
+│   ├── unsubscribe_executor/   # Unsubscribe execution engines
+│   │   ├── __init__.py
+│   │   └── http_executor.py    # HTTP GET unsubscribe executor
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (132 tests)
+├── tests/               # Comprehensive test suite (166 tests)
 │   ├── test_basic.py                        # Basic functionality tests
-│   ├── test_credentials.py                  # Credential storage tests (24 tests - NEW!)
+│   ├── test_credentials.py                  # Credential storage tests (24 tests)
 │   ├── test_deduplication.py               # Database constraint tests
+│   ├── test_http_get_executor.py           # HTTP GET executor tests (14 tests)
 │   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
-│   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
-│   ├── test_step1_subscription_creation.py # Subscription detection tests
-│   └── test_violations.py                  # Violation tracking tests
-├── docs/                # Documentation
-│   └── PROCESSING_RULES.md # Detailed unsubscribe extraction rules
-├── data/                # Database and data files (created automatically)
-│   └── email_passwords.json  # Stored credentials (excluded from git)
-├── main.py              # CLI entry point
-└── requirements.txt     # Python dependencies
-
-email_unsub_manager/
-├── src/
-│   ├── config/          # Configuration management
-│   │   ├── settings.py       # Environment configuration
-│   │   └── credentials.py    # Secure credential storage (NEW!)
-│   ├── database/        # Database models, management, and violation reporting
-│   │   ├── models.py    # SQLAlchemy models with keep_subscription flag
-│   │   ├── violations.py # Violation reporting system
-│   │   └── __init__.py  # Database initialization
-│   ├── email_processor/ # Email processing and subscription detection
-│   │   ├── imap_client.py      # IMAP connection handling
-│   │   ├── scanner.py          # Email scanning and storage
-│   │   ├── subscription_detector.py # Subscription detection
-│   │   ├── unsubscribe_processor.py # Unsubscribe attempt tracking
-│   │   └── unsubscribe/        # Unsubscribe extraction pipeline (NEW!)
-│   │       ├── __init__.py     # Clean API exports
-│   │       ├── constants.py    # Shared patterns and configuration
-│   │       ├── extractors.py   # Link extraction from headers/HTML/text
-│   │       ├── classifiers.py  # Method classification (GET/POST/email/one-click)
-│   │       ├── validators.py   # Security validation and safety checks
-│   │       └── processors.py   # Main pipeline and method management
-│   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (132 tests)
-│   ├── test_basic.py                        # Basic functionality tests
-│   ├── test_credentials.py                  # Credential storage tests (24 tests - NEW!)
-│   ├── test_deduplication.py               # Database constraint tests
-│   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
+│   ├── test_list_subscriptions.py          # list-subscriptions tests (12 tests)
 │   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
 │   ├── test_step1_subscription_creation.py # Subscription detection tests
 │   └── test_violations.py                  # Violation tracking tests
@@ -393,6 +327,12 @@ email_unsub_manager/
   - [x] Comprehensive security validation and safety checks
   - [x] "Most recent email wins" rule for method conflicts
   - [x] Full TDD methodology with 27 comprehensive tests
-- [ ] **Phase 4**: Automated unsubscribe execution (in planning)
-- [ ] **Phase 5**: Web interface and reporting
-- [ ] **Phase 6**: OAuth support for major providers
+- [x] **Phase 4**: HTTP GET unsubscribe execution ✅ **COMPLETE**
+  - [x] HttpGetExecutor with comprehensive safety checks
+  - [x] Dry-run mode for safe testing
+  - [x] Interactive CLI command with confirmations
+  - [x] Full attempt tracking and database integration
+  - [x] Full TDD methodology with 14 comprehensive tests
+- [ ] **Phase 5**: Additional unsubscribe methods (HTTP POST, email reply)
+- [ ] **Phase 6**: Web interface and reporting
+- [ ] **Phase 7**: OAuth support for major providers
