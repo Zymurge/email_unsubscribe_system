@@ -182,7 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - 2025-11-12
 
-### Added - Phase 4: Unsubscribe Execution (HTTP GET) ✅ COMPLETE
+### Added - Phase 4: Unsubscribe Execution (HTTP GET & POST) ✅ COMPLETE
 
 - **HTTP GET Unsubscribe Executor (TDD Implementation)**
   - `HttpGetExecutor` class for automated HTTP GET unsubscribe requests
@@ -191,11 +191,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Dry-run mode for safe testing
   - Full attempt tracking and database integration
 
+- **HTTP POST Unsubscribe Executor (TDD Implementation)**
+  - `HttpPostExecutor` class for form-based unsubscribe requests
+  - RFC 8058 compliance with List-Unsubscribe=One-Click header
+  - Same safety checks and features as GET executor
+  - Automatic executor selection based on subscription method
+  - Full POST request handling with proper headers
+
 - **Safety Checks & Validation**
   - Prevents unsubscribing from subscriptions marked "keep"
   - Skips already unsubscribed subscriptions
   - Validates presence of unsubscribe link
-  - Verifies correct method type (http_get)
+  - Verifies correct method type (http_get or http_post)
   - Enforces maximum retry attempts to avoid excessive failures
   - All checks with detailed reason messages
 
@@ -205,6 +212,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic redirect following
   - Handles 2xx status codes as success
   - Comprehensive error handling for HTTP errors and network exceptions
+  - POST requests include RFC 8058 List-Unsubscribe=One-Click header
 
 - **Database Integration**
   - Records all attempts in `UnsubscribeAttempt` table
@@ -226,19 +234,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Success/failure reporting with HTTP status codes
   - Support for `--dry-run` flag (simulation mode)
   - Support for `--yes` flag (skip confirmation)
+  - Automatic executor selection (GET or POST based on subscription method)
 
 - **Test Coverage**
   - 14 comprehensive TDD tests for HTTP GET executor
-  - 6 safety check validation tests
-  - 6 execution and error handling tests
-  - Rate limiting test
-  - Dry-run mode test
-  - All 166 tests passing across entire codebase
+  - 15 comprehensive TDD tests for HTTP POST executor
+  - 6 safety check validation tests per executor
+  - Execution and error handling tests
+  - Rate limiting tests
+  - Dry-run mode tests
+  - All 181 tests passing across entire codebase
 
 ### Technical Implementation
 
 - Test-Driven Development (TDD) methodology
-- RED phase: 14 test specifications written first
+- RED phase: Test specifications written first
 - GREEN phase: Implementation to pass all tests
 - REFACTOR phase: Clean code with proper separation of concerns
 
@@ -254,6 +264,8 @@ python main.py unsubscribe 8
 # Automatic unsubscribe (skip confirmation - use with caution!)
 python main.py unsubscribe 8 --yes
 ```
+
+**Note:** The unsubscribe command automatically selects the appropriate executor (GET or POST) based on the subscription's unsubscribe_method field.
 
 ### Planned for Future Phases
 

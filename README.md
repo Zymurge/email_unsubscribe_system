@@ -37,13 +37,14 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Integration with subscription detection
   - Comprehensive test coverage (7 tests)
 
-- **Phase 3 (Complete)**: Unsubscribe extraction and processing ✅
-  - Extract and classify unsubscribe links from emails
-  - Support multiple unsubscribe methods (HTTP GET/POST, email replies, one-click)
-  - RFC 2369 and RFC 8058 compliance (List-Unsubscribe headers)
-  - Safe unsubscribe link processing with comprehensive security validation
-  - Attempt tracking and success/failure reporting
-  - Comprehensive test coverage (27 tests)
+- **Phase 4 (Complete)**: Unsubscribe execution ✅
+  - HTTP GET executor with comprehensive safety checks
+  - HTTP POST executor with RFC 8058 compliance (List-Unsubscribe=One-Click header)
+  - Automatic executor selection based on subscription method
+  - Dry-run mode for safe testing
+  - Interactive CLI command with confirmations
+  - Full attempt tracking and database integration
+  - Comprehensive test coverage (29 tests: 14 GET + 15 POST)
 
 ## Installation
 
@@ -166,6 +167,8 @@ Output shows:
 
 ### Unsubscribe Execution
 
+Execute unsubscribe operations using HTTP GET or HTTP POST methods. The system automatically selects the appropriate executor based on the subscription's unsubscribe method.
+
 ```bash
 # Test unsubscribe (dry-run - safe, no actual request)
 py main.py unsubscribe 8 --dry-run
@@ -177,11 +180,18 @@ py main.py unsubscribe 8
 py main.py unsubscribe 8 --yes
 ```
 
+**Supported Methods:**
+
+- ✅ **HTTP GET**: Simple link-based unsubscribe (most common)
+- ✅ **HTTP POST**: Form-based unsubscribe with RFC 8058 compliance (List-Unsubscribe=One-Click header)
+
 **Safety Features:**
 
 - ✅ Won't unsubscribe from subscriptions marked "keep"
 - ✅ Skips already unsubscribed subscriptions
 - ✅ Validates unsubscribe link exists
+- ✅ Verifies correct method type (http_get or http_post)
+- ✅ Enforces maximum retry attempts
 - ✅ Shows detailed subscription info before executing
 - ✅ Requires confirmation (type 'yes')
 - ✅ Records all attempts in database
@@ -254,8 +264,9 @@ The system uses SQLite with the following main tables:
 
 ```bash
 ```bash
-python -m pytest tests/                    # Run all 166 tests
+python -m pytest tests/                    # Run all 181 tests
 python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests)
+python -m pytest tests/test_http_post_executor.py # Run HTTP POST executor tests (15 tests)
 python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests)
 python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests)
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
@@ -289,13 +300,15 @@ email_unsub_manager/
 │   │       └── processors.py   # Main pipeline and method management
 │   ├── unsubscribe_executor/   # Unsubscribe execution engines
 │   │   ├── __init__.py
-│   │   └── http_executor.py    # HTTP GET unsubscribe executor
+│   │   ├── http_get_executor.py    # HTTP GET unsubscribe executor
+│   │   └── http_post_executor.py   # HTTP POST unsubscribe executor (RFC 8058)
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (166 tests)
+├── tests/               # Comprehensive test suite (181 tests)
 │   ├── test_basic.py                        # Basic functionality tests
 │   ├── test_credentials.py                  # Credential storage tests (24 tests)
 │   ├── test_deduplication.py               # Database constraint tests
 │   ├── test_http_get_executor.py           # HTTP GET executor tests (14 tests)
+│   ├── test_http_post_executor.py          # HTTP POST executor tests (15 tests)
 │   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
 │   ├── test_list_subscriptions.py          # list-subscriptions tests (12 tests)
 │   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
@@ -327,12 +340,14 @@ email_unsub_manager/
   - [x] Comprehensive security validation and safety checks
   - [x] "Most recent email wins" rule for method conflicts
   - [x] Full TDD methodology with 27 comprehensive tests
-- [x] **Phase 4**: HTTP GET unsubscribe execution ✅ **COMPLETE**
+- [x] **Phase 4**: Unsubscribe execution ✅ **COMPLETE**
   - [x] HttpGetExecutor with comprehensive safety checks
+  - [x] HttpPostExecutor with RFC 8058 compliance (List-Unsubscribe=One-Click header)
+  - [x] Automatic executor selection based on subscription method
   - [x] Dry-run mode for safe testing
   - [x] Interactive CLI command with confirmations
   - [x] Full attempt tracking and database integration
-  - [x] Full TDD methodology with 14 comprehensive tests
-- [ ] **Phase 5**: Additional unsubscribe methods (HTTP POST, email reply)
+  - [x] Full TDD methodology with 29 comprehensive tests (14 GET + 15 POST)
+- [ ] **Phase 5**: Additional unsubscribe methods (email reply)
 - [ ] **Phase 6**: Web interface and reporting
 - [ ] **Phase 7**: OAuth support for major providers
