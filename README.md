@@ -19,6 +19,7 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Scan and index emails in SQLite database
   - Detect emails with unsubscribe information
   - Account and message management
+  - Secure credential storage with automatic password lookup
   - Comprehensive test coverage (12 tests)
 
 - **Phase 2 (Complete)**: Subscription detection ✅
@@ -67,13 +68,22 @@ The system uses environment variables for configuration. Create a `.env` file:
 # Database (defaults to SQLite in data/ directory)
 DATABASE_URL=sqlite:///email_subscriptions.db
 
+# Data directory (where database, logs, private settings are stored)
+DATA_DIR=./data
+
 # Scanning settings
 DEFAULT_SCAN_DAYS=30
 DEFAULT_BATCH_SIZE=50
 
 # Connection settings
 IMAP_TIMEOUT=30
+
+# Optional: Store credentials for automatic login
+# File is created in DATA_DIR with secure permissions (600)
+EMAIL_PSWD_STORE_PATH={$DATA_DIR}/email_passwords.json
 ```
+
+**Note**: The credential store file is automatically excluded from git via `.gitignore` and has restrictive file permissions (owner read/write only) for security.
 
 ## Usage
 
@@ -86,6 +96,23 @@ py main.py init
 ```bash
 py main.py add-account user@comcast.net
 ```
+
+### Store Credentials (New!)
+
+Store passwords securely to avoid repeated prompts:
+
+```bash
+# Store password for an account
+py main.py store-password user@comcast.net
+
+# List accounts with stored passwords
+py main.py list-passwords
+
+# Remove stored password
+py main.py remove-password user@comcast.net
+```
+
+**Note**: Stored credentials are saved in `data/email_passwords.json` with restrictive file permissions (600). When running commands that require passwords (scan, add-account, etc.), the system automatically uses stored credentials if available.
 
 ### Scan Account for Messages
 ```bash
@@ -178,7 +205,8 @@ The system uses SQLite with the following main tables:
 
 ### Running Tests
 ```bash
-python -m pytest tests/                    # Run all 57 tests
+python -m pytest tests/                    # Run all 132 tests
+python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests - NEW!)
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
 python -m pytest tests/test_step1_subscription_creation.py # Run subscription detection tests
 python -m pytest tests/test_phase3_unsubscribe_extraction.py # Run Phase 3 unsubscribe tests (27 tests)
@@ -189,6 +217,8 @@ python -m pytest tests/test_phase3_unsubscribe_extraction.py # Run Phase 3 unsub
 email_unsub_manager/
 ├── src/
 │   ├── config/          # Configuration management
+│   │   ├── settings.py       # Environment configuration
+│   │   └── credentials.py    # Secure credential storage (NEW!)
 │   ├── database/        # Database models, management, and violation reporting
 │   │   ├── models.py    # SQLAlchemy models with keep_subscription flag
 │   │   ├── violations.py # Violation reporting system
@@ -206,8 +236,9 @@ email_unsub_manager/
 │   │       ├── validators.py   # Security validation and safety checks
 │   │       └── processors.py   # Main pipeline and method management
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (57 tests)
+├── tests/               # Comprehensive test suite (132 tests)
 │   ├── test_basic.py                        # Basic functionality tests
+│   ├── test_credentials.py                  # Credential storage tests (24 tests - NEW!)
 │   ├── test_deduplication.py               # Database constraint tests
 │   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
 │   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
@@ -216,16 +247,18 @@ email_unsub_manager/
 ├── docs/                # Documentation
 │   └── PROCESSING_RULES.md # Detailed unsubscribe extraction rules
 ├── data/                # Database and data files (created automatically)
+│   └── email_passwords.json  # Stored credentials (excluded from git)
 ├── main.py              # CLI entry point
 └── requirements.txt     # Python dependencies
 ```
 
 ## Security Notes
 
-- Passwords are not stored in the database
+- Passwords can be securely stored in `data/email_passwords.json` with restrictive permissions (600)
+- Stored credentials are excluded from git via `.gitignore`
 - IMAP connections use SSL by default
 - Email content is limited to prevent excessive storage
-- Future unsubscribe operations will include safety checks
+- Unsubscribe operations include comprehensive safety checks and validation
 
 ## Roadmap
 

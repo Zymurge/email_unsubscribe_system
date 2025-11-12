@@ -47,6 +47,23 @@ class Config:
                 db_path = cls.get_data_dir() / db_file
                 return f"sqlite:///{db_path}"
         return cls.DATABASE_URL
+    
+    @classmethod
+    def get_credential_store_path(cls) -> Path:
+        """Get the path to the credential store file."""
+        # Get path from env or use default
+        store_path = os.getenv('EMAIL_PSWD_STORE_PATH', 'email_passwords.json')
+        
+        # Expand {$DATA_DIR} variable if present
+        if '{$DATA_DIR}' in store_path:
+            store_path = store_path.replace('{$DATA_DIR}', str(cls.get_data_dir()))
+        
+        # Convert to Path and make absolute if needed
+        path = Path(store_path)
+        if not path.is_absolute():
+            path = cls.get_data_dir() / path
+        
+        return path
 
 
 def load_config_from_env_file(env_file: str = '.env'):

@@ -12,12 +12,33 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from src.config import Config, load_config_from_env_file
+from src.config.credentials import get_credential_store
 from src.database import init_database
 from src.email_processor.scanner import EmailScanner
 from src.email_processor.combined_scanner import CombinedEmailScanner
 from src.email_processor.subscription_detector import SubscriptionDetector
 from src.database.violations import ViolationReporter
 from src.cli_session import get_cli_session_manager, with_db_session
+
+
+def get_password_for_account(email_address: str) -> str:
+    """
+    Get password for an account, checking credential store first.
+    
+    Args:
+        email_address: Email address to get password for
+        
+    Returns:
+        Password (from store or prompted)
+    """
+    cred_store = get_credential_store()
+    stored_password = cred_store.get_password(email_address)
+    
+    if stored_password:
+        print(f"Using stored credentials for {email_address}")
+        return stored_password
+    
+    return getpass.getpass(f"Password for {email_address}: ")
 
 
 def main():
@@ -46,6 +67,12 @@ def main():
         detect_subscriptions_command()
     elif command == 'violations':
         violations_command()
+    elif command == 'store-password':
+        store_password_command()
+    elif command == 'remove-password':
+        remove_password_command()
+    elif command == 'list-passwords':
+        list_passwords_command()
     else:
         print(f"Unknown command: {command}")
         print_usage()
@@ -68,6 +95,10 @@ Commands:
     stats <account_id>           Show account statistics
     detect-subscriptions <id>    Detect subscriptions for account (legacy)
     violations <account_id>      Show violation reports for account
+    
+    store-password <email>       Store password for an email account
+    remove-password <email>      Remove stored password for an email account
+    list-passwords               List email accounts with stored passwords
 
 Options:
     --debug-storage              Store detailed extraction info (use with scan-analyze)
@@ -75,6 +106,7 @@ Options:
 Examples:
     python main.py init
     python main.py add-account user@comcast.net
+    python main.py store-password user@comcast.net
     python main.py scan-analyze 1                    # Combined scan+analyze (recommended)
     python main.py scan-analyze 1 --debug-storage    # With debug info storage
     python main.py scan 1                            # Basic scan only
@@ -100,7 +132,7 @@ def add_account_command(session):
         return
         
     email_address = sys.argv[2]
-    password = getpass.getpass(f"Password for {email_address}: ")
+    password = get_password_for_account(email_address)
     
     try:
         scanner = EmailScanner(session)
@@ -134,7 +166,7 @@ def scan_command(session):
             print(f"Account {account_id} not found")
             return
             
-        password = getpass.getpass(f"Password for {account['email_address']}: ")
+        password = get_password_for_account(account['email_address'])
         
         print(f"Scanning account {account['email_address']} (last {days_back} days)...")
         results = scanner.scan_account(account_id, password, days_back=days_back, limit=limit)
@@ -176,7 +208,7 @@ def combined_scan_command(session):
             print(f"Account {account_id} not found")
             return
             
-        password = getpass.getpass(f"Password for {account['email_address']}: ")
+        password = get_password_for_account(account['email_address'])
         
         # Create combined scanner
         combined_scanner = CombinedEmailScanner(session, enable_debug_storage=enable_debug_storage)
@@ -352,6 +384,69 @@ def violations_command(session):
         print("Account ID must be a number")
     except Exception as e:
         print(f"Error getting violations: {e}")
+
+
+def store_password_command():
+    """Store password for an email account."""
+    if len(sys.argv) < 3:
+        print("Usage: python main.py store-password <email>")
+        return
+    
+    email_address = sys.argv[2]
+    password = getpass.getpass(f"Password for {email_address}: ")
+    confirm_password = getpass.getpass(f"Confirm password: ")
+    
+    if password != confirm_password:
+        print("Passwords do not match")
+        return
+    
+    try:
+        cred_store = get_credential_store()
+        cred_store.set_password(email_address, password)
+        print(f"Password stored for {email_address}")
+        print(f"Credentials are saved in: {cred_store.store_path}")
+    except Exception as e:
+        print(f"Error storing password: {e}")
+
+
+def remove_password_command():
+    """Remove stored password for an email account."""
+    if len(sys.argv) < 3:
+        print("Usage: python main.py remove-password <email>")
+        return
+    
+    email_address = sys.argv[2]
+    
+    try:
+        cred_store = get_credential_store()
+        if cred_store.remove_password(email_address):
+            print(f"Password removed for {email_address}")
+        else:
+            print(f"No stored password found for {email_address}")
+    except Exception as e:
+        print(f"Error removing password: {e}")
+
+
+def list_passwords_command():
+    """List email accounts with stored passwords."""
+    try:
+        cred_store = get_credential_store()
+        stored_emails = cred_store.list_stored_emails()
+        
+        if not stored_emails:
+            print("No stored passwords found")
+            print(f"Use 'store-password' command to save credentials")
+            return
+        
+        print(f"\nEmail accounts with stored passwords:")
+        print(f"Credentials stored in: {cred_store.store_path}")
+        print("-" * 50)
+        for email in stored_emails:
+            print(f"  {email}")
+        print("-" * 50)
+        print(f"Total: {len(stored_emails)} account(s)")
+    except Exception as e:
+        print(f"Error listing passwords: {e}")
 
 
 if __name__ == '__main__':

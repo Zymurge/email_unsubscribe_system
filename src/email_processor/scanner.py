@@ -27,7 +27,7 @@ class EmailScanner:
                 provider = 'gmail'
             elif 'comcast' in domain:
                 provider = 'comcast'
-            elif 'outlook' in domain or 'hotmail' in domain:
+            elif 'outlook' in domain or 'hotmail' in domain or 'live.com' in domain:
                 provider = 'outlook'
             elif 'yahoo' in domain:
                 provider = 'yahoo'
