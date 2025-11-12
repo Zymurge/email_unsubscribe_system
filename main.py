@@ -531,7 +531,7 @@ def unsubscribe_command(session):
         skip_confirm = '--yes' in sys.argv
         
         # Get subscription
-        from src.database.models import Subscription, UnsubscribeAttempt
+        from src.database.models import Subscription, UnsubscribeAttempt, Account
         subscription = session.query(Subscription).filter_by(id=subscription_id).first()
         
         if not subscription:
@@ -572,17 +572,50 @@ def unsubscribe_command(session):
         if subscription.unsubscribe_method == 'http_get':
             from src.unsubscribe_executor.http_executor import HttpGetExecutor
             executor = HttpGetExecutor(session, dry_run=dry_run)
+            method_display = "HTTP GET"
+            # HTTP executors use subscription_id
+            should_execute_result = executor.should_execute(subscription_id)
+            execute_param = subscription_id
         elif subscription.unsubscribe_method == 'http_post':
             from src.unsubscribe_executor.http_post_executor import HttpPostExecutor
             executor = HttpPostExecutor(session, dry_run=dry_run)
+            method_display = "HTTP POST"
+            # HTTP executors use subscription_id
+            should_execute_result = executor.should_execute(subscription_id)
+            execute_param = subscription_id
+        elif subscription.unsubscribe_method == 'email_reply':
+            from src.unsubscribe_executor.email_reply_executor import EmailReplyExecutor
+            from src.config.credentials import CredentialStore
+            
+            # Get email credentials
+            credential_store = CredentialStore()
+            account = session.query(Account).filter_by(id=subscription.account_id).first()
+            if not account:
+                print(f"\n❌ Account not found for subscription")
+                return
+            
+            email_password = credential_store.get_password(account.email_address)
+            if not email_password:
+                print(f"\n❌ No stored credentials for {account.email_address}")
+                print(f"   Run: python main.py store-password {account.email_address}")
+                return
+            
+            executor = EmailReplyExecutor(
+                session=session,
+                email_address=account.email_address,
+                email_password=email_password,
+                dry_run=dry_run
+            )
+            method_display = "Email Reply"
+            # Email executor uses subscription object
+            should_execute_result = executor.should_execute(subscription)
+            execute_param = subscription
         else:
             print(f"\n❌ Unsupported unsubscribe method: {subscription.unsubscribe_method}")
-            print(f"   Currently supported: http_get, http_post")
+            print(f"   Currently supported: http_get, http_post, email_reply")
             return
         
         # Check if should execute
-        should_execute_result = executor.should_execute(subscription_id)
-        
         if not should_execute_result['should_execute']:
             print(f"\n❌ Cannot execute unsubscribe:")
             print(f"   {should_execute_result['reason']}")
@@ -591,14 +624,15 @@ def unsubscribe_command(session):
         # Confirmation prompt (unless --yes flag or dry-run)
         if not skip_confirm and not dry_run:
             print(f"\n⚠️  Are you sure you want to unsubscribe from '{subscription.sender_email}'?")
+            print(f"   Method: {method_display}")
             confirmation = input("Type 'yes' to confirm: ")
             if confirmation.lower() != 'yes':
                 print("Unsubscribe cancelled")
                 return
         
         # Execute unsubscribe
-        print(f"\n{'Simulating' if dry_run else 'Executing'} unsubscribe...")
-        result = executor.execute(subscription_id)
+        print(f"\n{'Simulating' if dry_run else 'Executing'} unsubscribe via {method_display}...")
+        result = executor.execute(execute_param)
         
         # Display results
         print(f"\n{'='*80}")
