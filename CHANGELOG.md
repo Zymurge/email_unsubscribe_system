@@ -94,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Enhanced URL extraction with quoted-printable encoding support
 - Improved combined scan+analyze workflow
+- Subscription management and filtering commands
 
 ## [0.3.0] - 2025-11-11
 
@@ -169,6 +170,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `store-password <email>` - Store password for an email account with secure prompting
 - `remove-password <email>` - Remove stored password for an email account
 - `list-passwords` - List email accounts with stored passwords
+- `list-subscriptions <account_id>` - List subscriptions with filtering by keep status (`--keep=yes|no|all`)
 
 ### Planned for Future Phases
 

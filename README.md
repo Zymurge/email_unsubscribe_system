@@ -132,11 +132,33 @@ py main.py stats 1
 ```
 
 ### Detect Subscriptions (New!)
+
 ```bash
 py main.py detect-subscriptions 1    # Detect subscriptions for account ID 1
 ```
 
+### List Subscriptions (New!)
+
+```bash
+# List all subscriptions
+py main.py list-subscriptions 1
+
+# Filter by keep status
+py main.py list-subscriptions 1 --keep=yes    # Only kept subscriptions
+py main.py list-subscriptions 1 --keep=no     # Only non-kept (ready to unsubscribe)
+py main.py list-subscriptions 1 --keep=all    # All subscriptions (default)
+```
+
+Output shows:
+
+- Subscription ID, sender email, email count
+- Keep status (✓ for kept, blank otherwise)
+- Unsubscribed status (Yes/No)
+- Violation count (if unsubscribed)
+- Unsubscribe method available
+
 ### Manage Subscriptions (New!)
+
 ```python
 # Mark subscriptions to keep (skip unsubscribe processing)
 from src.database.models import Subscription
@@ -205,8 +227,9 @@ The system uses SQLite with the following main tables:
 
 ### Running Tests
 ```bash
-python -m pytest tests/                    # Run all 132 tests
+python -m pytest tests/                    # Run all 144 tests (132 + 12 new list-subscriptions tests)
 python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests - NEW!)
+python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests - NEW!)
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
 python -m pytest tests/test_step1_subscription_creation.py # Run subscription detection tests
 python -m pytest tests/test_phase3_unsubscribe_extraction.py # Run Phase 3 unsubscribe tests (27 tests)

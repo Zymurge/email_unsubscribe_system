@@ -67,6 +67,8 @@ def main():
         detect_subscriptions_command()
     elif command == 'violations':
         violations_command()
+    elif command == 'list-subscriptions':
+        list_subscriptions_command()
     elif command == 'store-password':
         store_password_command()
     elif command == 'remove-password':
@@ -95,6 +97,7 @@ Commands:
     stats <account_id>           Show account statistics
     detect-subscriptions <id>    Detect subscriptions for account (legacy)
     violations <account_id>      Show violation reports for account
+    list-subscriptions <id>      List subscriptions for account [--keep=yes|no|all]
     
     store-password <email>       Store password for an email account
     remove-password <email>      Remove stored password for an email account
@@ -102,6 +105,7 @@ Commands:
 
 Options:
     --debug-storage              Store detailed extraction info (use with scan-analyze)
+    --keep=yes|no|all            Filter subscriptions by keep status (default: all)
 
 Examples:
     python main.py init
@@ -112,6 +116,9 @@ Examples:
     python main.py scan 1                            # Basic scan only
     python main.py stats 1
     python main.py violations 1
+    python main.py list-subscriptions 1              # List all subscriptions
+    python main.py list-subscriptions 1 --keep=yes   # Only kept subscriptions
+    python main.py list-subscriptions 1 --keep=no    # Only non-kept subscriptions
     """)
 
 
@@ -384,6 +391,121 @@ def violations_command(session):
         print("Account ID must be a number")
     except Exception as e:
         print(f"Error getting violations: {e}")
+
+
+@with_db_session
+def list_subscriptions_command(session):
+    """List subscriptions for an account with filtering."""
+    if len(sys.argv) < 3:
+        print("Usage: python main.py list-subscriptions <account_id> [--keep=yes|no|all]")
+        return
+    
+    try:
+        account_id = int(sys.argv[2])
+        
+        # Parse --keep filter
+        keep_filter = None  # None means show all
+        for arg in sys.argv[3:]:
+            if arg.startswith('--keep='):
+                keep_value = arg.split('=')[1].lower()
+                if keep_value == 'yes':
+                    keep_filter = True
+                elif keep_value == 'no':
+                    keep_filter = False
+                elif keep_value == 'all':
+                    keep_filter = None
+                else:
+                    print(f"Invalid --keep value: {keep_value}. Use yes, no, or all")
+                    return
+        
+        # Get account info
+        from src.database.models import Account, Subscription
+        account = session.query(Account).filter_by(id=account_id).first()
+        if not account:
+            print(f"Account {account_id} not found")
+            return
+        
+        # Build query
+        query = session.query(Subscription).filter_by(account_id=account_id)
+        
+        # Apply keep filter if specified
+        if keep_filter is not None:
+            query = query.filter_by(keep_subscription=keep_filter)
+        
+        # Order by email count (most emails first)
+        subscriptions = query.order_by(Subscription.email_count.desc()).all()
+        
+        if not subscriptions:
+            filter_msg = ""
+            if keep_filter is True:
+                filter_msg = " (filtered: keep=yes)"
+            elif keep_filter is False:
+                filter_msg = " (filtered: keep=no)"
+            print(f"\nNo subscriptions found for {account.email_address}{filter_msg}")
+            return
+        
+        # Display header
+        print(f"\n{'='*90}")
+        print(f"Subscriptions for {account.email_address}")
+        filter_msg = ""
+        if keep_filter is True:
+            filter_msg = " (showing only kept subscriptions)"
+        elif keep_filter is False:
+            filter_msg = " (showing only non-kept subscriptions)"
+        if filter_msg:
+            print(filter_msg)
+        print(f"{'='*90}")
+        
+        # Column headers
+        print(f"\n{'ID':<5} {'Sender':<35} {'Emails':>7} {'Keep':>6} {'Unsub':>7} {'Violations':>11} {'Method':<12}")
+        print("-" * 90)
+        
+        # Count stats
+        kept_count = 0
+        unsubscribed_count = 0
+        ready_count = 0
+        
+        # Display each subscription
+        for sub in subscriptions:
+            # Keep indicator
+            keep_indicator = "[✓]" if sub.keep_subscription else "[ ]"
+            
+            # Unsubscribed status
+            unsub_status = "Yes" if sub.unsubscribed_at else "No"
+            
+            # Violation count (only show if unsubscribed)
+            violations_display = str(sub.violation_count) if sub.unsubscribed_at else "-"
+            
+            # Method display
+            method = sub.unsubscribe_method or "none"
+            
+            # Truncate sender if too long
+            sender_display = sub.sender_email[:34] if len(sub.sender_email) > 34 else sub.sender_email
+            
+            print(f"{sub.id:<5} {sender_display:<35} {sub.email_count:>7} {keep_indicator:>6} "
+                  f"{unsub_status:>7} {violations_display:>11} {method:<12}")
+            
+            # Update stats
+            if sub.keep_subscription:
+                kept_count += 1
+            if sub.unsubscribed_at:
+                unsubscribed_count += 1
+            if not sub.keep_subscription and not sub.unsubscribed_at:
+                ready_count += 1
+        
+        # Summary
+        print("-" * 90)
+        print(f"Total: {len(subscriptions)} subscription(s)")
+        if keep_filter is None:  # Only show breakdown if showing all
+            print(f"  Kept: {kept_count} | Already Unsubscribed: {unsubscribed_count} | Ready to Unsubscribe: {ready_count}")
+        print()
+        
+    except ValueError:
+        print("Account ID must be a number")
+    except Exception as e:
+        print(f"Error listing subscriptions: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def store_password_command():
