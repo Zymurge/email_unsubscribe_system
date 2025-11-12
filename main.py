@@ -568,9 +568,17 @@ def unsubscribe_command(session):
         if dry_run:
             print("\n[DRY RUN MODE] - No actual unsubscribe will be performed")
         
-        # Import executor
-        from src.unsubscribe_executor.http_executor import HttpGetExecutor
-        executor = HttpGetExecutor(session, dry_run=dry_run)
+        # Import appropriate executor based on method
+        if subscription.unsubscribe_method == 'http_get':
+            from src.unsubscribe_executor.http_executor import HttpGetExecutor
+            executor = HttpGetExecutor(session, dry_run=dry_run)
+        elif subscription.unsubscribe_method == 'http_post':
+            from src.unsubscribe_executor.http_post_executor import HttpPostExecutor
+            executor = HttpPostExecutor(session, dry_run=dry_run)
+        else:
+            print(f"\n❌ Unsupported unsubscribe method: {subscription.unsubscribe_method}")
+            print(f"   Currently supported: http_get, http_post")
+            return
         
         # Check if should execute
         should_execute_result = executor.should_execute(subscription_id)
