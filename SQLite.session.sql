@@ -1,0 +1,1 @@
+DELETE from email_messages;
