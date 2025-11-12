@@ -40,11 +40,13 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
 - **Phase 4 (Complete)**: Unsubscribe execution ✅
   - HTTP GET executor with comprehensive safety checks
   - HTTP POST executor with RFC 8058 compliance (List-Unsubscribe=One-Click header)
+  - Email Reply executor with SMTP sending
   - Automatic executor selection based on subscription method
+  - Support for Gmail, Outlook, Yahoo, and other SMTP providers
   - Dry-run mode for safe testing
   - Interactive CLI command with confirmations
   - Full attempt tracking and database integration
-  - Comprehensive test coverage (29 tests: 14 GET + 15 POST)
+  - Comprehensive test coverage (52 tests: 14 GET + 15 POST + 23 Email)
 
 ## Installation
 
@@ -167,10 +169,10 @@ Output shows:
 
 ### Unsubscribe Execution
 
-Execute unsubscribe operations using HTTP GET or HTTP POST methods. The system automatically selects the appropriate executor based on the subscription's unsubscribe method.
+Execute unsubscribe operations using HTTP GET, HTTP POST, or Email Reply methods. The system automatically selects the appropriate executor based on the subscription's unsubscribe method.
 
 ```bash
-# Test unsubscribe (dry-run - safe, no actual request)
+# Test unsubscribe (dry-run - safe, no actual request/email)
 py main.py unsubscribe 8 --dry-run
 
 # Execute unsubscribe (with confirmation prompt)
@@ -184,25 +186,27 @@ py main.py unsubscribe 8 --yes
 
 - ✅ **HTTP GET**: Simple link-based unsubscribe (most common)
 - ✅ **HTTP POST**: Form-based unsubscribe with RFC 8058 compliance (List-Unsubscribe=One-Click header)
+- ✅ **Email Reply**: mailto: unsubscribe links with SMTP sending
 
 **Safety Features:**
 
 - ✅ Won't unsubscribe from subscriptions marked "keep"
 - ✅ Skips already unsubscribed subscriptions
 - ✅ Validates unsubscribe link exists
-- ✅ Verifies correct method type (http_get or http_post)
+- ✅ Verifies correct method type (http_get, http_post, or email_reply)
 - ✅ Enforces maximum retry attempts
 - ✅ Shows detailed subscription info before executing
 - ✅ Requires confirmation (type 'yes')
 - ✅ Records all attempts in database
 - ✅ Supports dry-run mode for testing
+- ✅ Automatic credential lookup for email unsubscribe
 
 **What it shows:**
 
 - Subscription details (ID, sender, email count, keep status)
 - Previous attempt history (last 3 attempts with status)
 - Safety check results
-- HTTP status code and response
+- HTTP status code / email delivery confirmation
 - Success/failure with detailed messages
 
 ### View Violation Reports
@@ -264,9 +268,10 @@ The system uses SQLite with the following main tables:
 
 ```bash
 ```bash
-python -m pytest tests/                    # Run all 181 tests
+python -m pytest tests/                    # Run all 204 tests
 python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests)
 python -m pytest tests/test_http_post_executor.py # Run HTTP POST executor tests (15 tests)
+python -m pytest tests/test_email_reply_executor.py # Run Email Reply executor tests (23 tests)
 python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests)
 python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests)
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
@@ -301,12 +306,14 @@ email_unsub_manager/
 │   ├── unsubscribe_executor/   # Unsubscribe execution engines
 │   │   ├── __init__.py
 │   │   ├── http_get_executor.py    # HTTP GET unsubscribe executor
-│   │   └── http_post_executor.py   # HTTP POST unsubscribe executor (RFC 8058)
+│   │   ├── http_post_executor.py   # HTTP POST unsubscribe executor (RFC 8058)
+│   │   └── email_reply_executor.py # Email Reply unsubscribe executor (SMTP)
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (181 tests)
+├── tests/               # Comprehensive test suite (204 tests)
 │   ├── test_basic.py                        # Basic functionality tests
 │   ├── test_credentials.py                  # Credential storage tests (24 tests)
 │   ├── test_deduplication.py               # Database constraint tests
+│   ├── test_email_reply_executor.py        # Email Reply executor tests (23 tests)
 │   ├── test_http_get_executor.py           # HTTP GET executor tests (14 tests)
 │   ├── test_http_post_executor.py          # HTTP POST executor tests (15 tests)
 │   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
@@ -343,11 +350,12 @@ email_unsub_manager/
 - [x] **Phase 4**: Unsubscribe execution ✅ **COMPLETE**
   - [x] HttpGetExecutor with comprehensive safety checks
   - [x] HttpPostExecutor with RFC 8058 compliance (List-Unsubscribe=One-Click header)
+  - [x] EmailReplyExecutor with SMTP sending and authentication
   - [x] Automatic executor selection based on subscription method
+  - [x] Support for Gmail, Outlook, Yahoo, and other SMTP providers
   - [x] Dry-run mode for safe testing
   - [x] Interactive CLI command with confirmations
   - [x] Full attempt tracking and database integration
-  - [x] Full TDD methodology with 29 comprehensive tests (14 GET + 15 POST)
-- [ ] **Phase 5**: Additional unsubscribe methods (email reply)
-- [ ] **Phase 6**: Web interface and reporting
-- [ ] **Phase 7**: OAuth support for major providers
+  - [x] Full TDD methodology with 52 comprehensive tests (14 GET + 15 POST + 23 Email)
+- [ ] **Phase 5**: Web interface and reporting
+- [ ] **Phase 6**: OAuth support for major providers

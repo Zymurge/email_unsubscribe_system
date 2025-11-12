@@ -210,6 +210,181 @@ When a single email contains multiple unsubscribe methods:
 
 ---
 
+## Phase 4: Unsubscribe Execution Rules
+
+### Executor Selection Rules
+
+#### **RULE: Automatic Method-Based Executor Selection**
+
+- System automatically selects executor based on `subscription.unsubscribe_method`
+- Three executors available:
+  - `http_get` → HttpGetExecutor
+  - `http_post` → HttpPostExecutor
+  - `email_reply` → EmailReplyExecutor
+- Unsupported methods are rejected with clear error message
+
+### HTTP Executor Rules (GET & POST)
+
+#### Request Requirements
+
+- **User-Agent Header**: Custom header identifying the application
+- **Timeout**: Default 30 seconds, configurable
+- **Redirect Handling**: Automatically follow redirects
+- **Success Criteria**: HTTP 2xx status codes
+- **POST Specific**: Include RFC 8058 List-Unsubscribe=One-Click header
+
+#### Safety Validations
+
+- Check subscription not marked `keep_subscription=True`
+- Check not already unsubscribed (`unsubscribed_at` is None)
+- Validate unsubscribe link exists
+- Verify method matches subscription method
+- Enforce max attempts limit (default 3)
+
+#### Error Handling
+
+- HTTP errors: Record status code and error message
+- Network exceptions: Capture and log connection failures
+- Timeout errors: Record timeout and retry count
+- All failures recorded in database with error details
+
+### Email Reply Executor Rules
+
+#### SMTP Requirements
+
+- **Credentials Required**: Email address and password mandatory
+- **SMTP Configuration**: Configurable host and port
+- **Encryption**: STARTTLS for secure connection
+- **Authentication**: Login with stored credentials
+- **Timeout**: Default 30 seconds, configurable
+
+#### mailto: URL Parsing
+
+- Extract recipient from URL path
+- Parse query parameters for subject and body
+- URL decode all parameters properly
+- Use defaults if subject/body not provided:
+  - Default subject: "Unsubscribe"
+  - Default body: "Please unsubscribe me from this mailing list."
+
+#### Email Composition
+
+- **From**: User's email address from account
+- **To**: Recipient from mailto: URL
+- **Subject**: From mailto: params or default
+- **Body**: From mailto: params or default
+- **Format**: Plain text MIME message
+
+#### Safety Validations
+
+- Same checks as HTTP executors
+- Additional check for credentials availability
+- Automatic credential lookup from stored passwords
+- Fail gracefully if credentials not found
+
+#### Error Handling
+
+- SMTP connection errors: Record connection failures
+- Authentication errors: Record auth failures
+- Send failures: Record SMTP exceptions
+- Network timeouts: Record timeout errors
+- All failures recorded with detailed error messages
+
+### Rate Limiting Rules
+
+#### **RULE: Prevent Request/Email Flooding**
+
+- **Delay Between Requests**: Configurable (default 2 seconds)
+- **Per-Executor Instance**: Each executor tracks its own timing
+- **Implementation**: Sleep if elapsed time less than delay
+- **First Request**: No delay on first request
+- **Subsequent Requests**: Apply full rate limit
+
+#### Rate Limit Calculation
+
+```python
+if last_request_time is not None:
+    elapsed = current_time - last_request_time
+    if elapsed < rate_limit_delay:
+        sleep(rate_limit_delay - elapsed)
+```
+
+### Dry-Run Mode Rules
+
+#### **RULE: Safe Testing Without Execution**
+
+- **Purpose**: Test unsubscribe flow without actual execution
+- **Behavior**: Simulate all checks and steps
+- **Output**: Report what would happen
+- **Database**: NO updates to subscription or attempts
+- **Network**: NO HTTP requests or SMTP connections
+- **CLI Flag**: `--dry-run` enables dry-run mode
+
+#### Dry-Run Return Values
+
+- All executors return success with `status: 'dry_run'`
+- Message indicates simulation: "Would send...", "Would request..."
+- All safety checks still performed
+- No database modifications
+
+### Database Update Rules (Phase 4)
+
+#### Successful Unsubscribe
+
+- Set `subscription.unsubscribed_at` to current timestamp
+- Set `subscription.unsubscribe_status` to 'unsubscribed'
+- Create `UnsubscribeAttempt` with status='success'
+- Record method used in `method_used` field
+- Commit transaction
+
+#### Failed Unsubscribe
+
+- Keep `subscription.unsubscribed_at` as None
+- Keep `subscription.unsubscribe_status` unchanged
+- Create `UnsubscribeAttempt` with status='failed'
+- Record error message in `error_message` field
+- Record HTTP status code if applicable
+- Commit transaction (to preserve failure record)
+
+#### Attempt Record Fields
+
+- `subscription_id`: Link to parent subscription
+- `method_used`: 'http_get', 'http_post', or 'email_reply'
+- `status`: 'success' or 'failed'
+- `attempted_at`: Timestamp of attempt
+- `response_code`: HTTP status code (for HTTP methods)
+- `error_message`: Error details (for failures)
+
+### CLI Command Rules (Phase 4)
+
+#### User Confirmation Flow
+
+1. Display subscription details (ID, sender, email count, keep status)
+2. Show previous attempt history (last 3 attempts)
+3. Show unsubscribe link and method
+4. Request confirmation: "Type 'yes' to confirm"
+5. Execute only if user confirms
+6. Skip confirmation with `--yes` flag (use with caution!)
+
+#### Safety Check Display
+
+- Clear indication of why unsubscribe cannot proceed
+- Detailed reason messages for failed checks
+- Examples:
+  - "Subscription marked to keep (skip unsubscribe)"
+  - "Already unsubscribed"
+  - "No unsubscribe link available"
+  - "Max attempts (3) reached"
+
+#### Result Display
+
+- Success: Show confirmation with method details
+- Failure: Show error message and status codes
+- Dry-run: Clearly indicate simulation mode
+- Database: Confirm attempt recorded
+
+---
+
 ## Cross-Phase Integration Rules
 
 ### Email Message Processing
@@ -308,6 +483,18 @@ When a single email contains multiple unsubscribe methods:
 ---
 
 ## Changelog
+
+### Phase 4 (November 2025)
+
+- Added unsubscribe execution rules for HTTP GET, HTTP POST, and Email Reply
+- Defined automatic executor selection based on subscription method
+- Added comprehensive safety validation rules for all executors
+- Defined rate limiting rules to prevent request/email flooding
+- Added dry-run mode rules for safe testing without execution
+- Defined database update rules for successful and failed attempts
+- Added CLI command rules with user confirmation flow
+- Defined SMTP configuration and mailto: URL parsing rules
+- Added credential management rules for email unsubscribe
 
 ### Phase 3 (November 2025)
 

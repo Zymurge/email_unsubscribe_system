@@ -182,7 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - 2025-11-12
 
-### Added - Phase 4: Unsubscribe Execution (HTTP GET & POST) ✅ COMPLETE
+### Added - Phase 4: Unsubscribe Execution (HTTP GET, POST & Email Reply) ✅ COMPLETE
 
 - **HTTP GET Unsubscribe Executor (TDD Implementation)**
   - `HttpGetExecutor` class for automated HTTP GET unsubscribe requests
@@ -198,11 +198,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic executor selection based on subscription method
   - Full POST request handling with proper headers
 
+- **Email Reply Unsubscribe Executor (TDD Implementation)**
+  - `EmailReplyExecutor` class for mailto: unsubscribe links
+  - SMTP email sending with authentication support
+  - mailto: URL parsing (recipient, subject, body parameters)
+  - Support for Gmail, Outlook, Yahoo, and other SMTP providers
+  - Automatic credential lookup from stored passwords
+  - Same safety checks and features as HTTP executors
+  - Network timeout and error handling
+
 - **Safety Checks & Validation**
   - Prevents unsubscribing from subscriptions marked "keep"
   - Skips already unsubscribed subscriptions
   - Validates presence of unsubscribe link
-  - Verifies correct method type (http_get or http_post)
+  - Verifies correct method type (http_get, http_post, or email_reply)
   - Enforces maximum retry attempts to avoid excessive failures
   - All checks with detailed reason messages
 
@@ -214,6 +223,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive error handling for HTTP errors and network exceptions
   - POST requests include RFC 8058 List-Unsubscribe=One-Click header
 
+- **Email Sending Execution**
+  - SMTP connection with STARTTLS encryption
+  - Email authentication with stored credentials
+  - Configurable SMTP host and port
+  - Connection error handling (timeout, auth failure, send failure)
+  - Customizable subject and body from mailto: parameters
+
 - **Database Integration**
   - Records all attempts in `UnsubscribeAttempt` table
   - Tracks status (success/failed), method, response code, error messages
@@ -222,8 +238,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Full audit trail of all unsubscribe actions
 
 - **Rate Limiting & Throttling**
-  - Configurable delay between requests
-  - Prevents overwhelming target servers
+  - Configurable delay between requests/emails
+  - Prevents overwhelming target servers or SMTP limits
   - Per-executor instance tracking
 
 - **CLI Unsubscribe Command**
@@ -231,19 +247,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Detailed subscription information display
   - Shows previous attempt history (last 3 attempts)
   - Safety check results with clear messages
-  - Success/failure reporting with HTTP status codes
+  - Success/failure reporting with HTTP status codes or email delivery
   - Support for `--dry-run` flag (simulation mode)
   - Support for `--yes` flag (skip confirmation)
-  - Automatic executor selection (GET or POST based on subscription method)
+  - Automatic executor selection (GET, POST, or Email based on subscription method)
+  - Automatic credential retrieval for email unsubscribe
 
 - **Test Coverage**
   - 14 comprehensive TDD tests for HTTP GET executor
   - 15 comprehensive TDD tests for HTTP POST executor
-  - 6 safety check validation tests per executor
+  - 23 comprehensive TDD tests for Email Reply executor
+  - Safety check validation tests for all executors
   - Execution and error handling tests
   - Rate limiting tests
   - Dry-run mode tests
-  - All 181 tests passing across entire codebase
+  - All 204 tests passing across entire codebase
 
 ### Technical Implementation
 
@@ -255,7 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CLI Usage Examples
 
 ```bash
-# Dry-run test (safe, no actual request)
+# Dry-run test (safe, no actual request/email)
 python main.py unsubscribe 8 --dry-run
 
 # Interactive unsubscribe (with confirmation)
@@ -265,7 +283,7 @@ python main.py unsubscribe 8
 python main.py unsubscribe 8 --yes
 ```
 
-**Note:** The unsubscribe command automatically selects the appropriate executor (GET or POST) based on the subscription's unsubscribe_method field.
+**Note:** The unsubscribe command automatically selects the appropriate executor (GET, POST, or Email Reply) based on the subscription's unsubscribe_method field.
 
 ### Planned for Future Phases
 
