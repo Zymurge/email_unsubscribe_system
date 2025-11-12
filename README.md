@@ -48,14 +48,16 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
 ## Installation
 
 1. Create and activate a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Linux/Mac
-# or
-venv\Scripts\activate     # On Windows
-```
 
-2. Install dependencies:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Linux/Mac
+   # or
+   venv\Scripts\activate     # On Windows
+   ```
+
+1. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -88,11 +90,13 @@ EMAIL_PSWD_STORE_PATH={$DATA_DIR}/email_passwords.json
 ## Usage
 
 ### Initialize Database
+
 ```bash
 py main.py init
 ```
 
 ### Add Email Account
+
 ```bash
 py main.py add-account user@comcast.net
 ```
@@ -115,6 +119,7 @@ py main.py remove-password user@comcast.net
 **Note**: Stored credentials are saved in `data/email_passwords.json` with restrictive file permissions (600). When running commands that require passwords (scan, add-account, etc.), the system automatically uses stored credentials if available.
 
 ### Scan Account for Messages
+
 ```bash
 py main.py scan 1           # Scan account ID 1 (last 30 days)
 py main.py scan 1 7         # Scan last 7 days
@@ -122,11 +127,13 @@ py main.py scan 1 30 1000   # Scan last 30 days, limit to 1000 messages
 ```
 
 ### List Accounts
+
 ```bash
 py main.py list-accounts
 ```
 
 ### View Account Statistics
+
 ```bash
 py main.py stats 1
 ```
@@ -173,11 +180,13 @@ if not subscription.should_skip_unsubscribe():
 ```
 
 ### View Violation Reports (New!)
+
 ```bash
 py main.py violations 1              # View unsubscribe violations for account ID 1
 ```
 
 ### Unsubscribe Processing (Phase 3 - New!)
+
 ```python
 # Extract unsubscribe methods from email
 from src.email_processor.unsubscribe import UnsubscribeProcessor
@@ -226,6 +235,7 @@ The system uses SQLite with the following main tables:
 ## Development
 
 ### Running Tests
+
 ```bash
 python -m pytest tests/                    # Run all 144 tests (132 + 12 new list-subscriptions tests)
 python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests - NEW!)
@@ -236,7 +246,8 @@ python -m pytest tests/test_phase3_unsubscribe_extraction.py # Run Phase 3 unsub
 ```
 
 ### Project Structure
-```
+
+```plaintext
 email_unsub_manager/
 ├── src/
 │   ├── config/          # Configuration management
@@ -274,6 +285,44 @@ email_unsub_manager/
 ├── main.py              # CLI entry point
 └── requirements.txt     # Python dependencies
 ```
+email_unsub_manager/
+├── src/
+│   ├── config/          # Configuration management
+│   │   ├── settings.py       # Environment configuration
+│   │   └── credentials.py    # Secure credential storage (NEW!)
+│   ├── database/        # Database models, management, and violation reporting
+│   │   ├── models.py    # SQLAlchemy models with keep_subscription flag
+│   │   ├── violations.py # Violation reporting system
+│   │   └── __init__.py  # Database initialization
+│   ├── email_processor/ # Email processing and subscription detection
+│   │   ├── imap_client.py      # IMAP connection handling
+│   │   ├── scanner.py          # Email scanning and storage
+│   │   ├── subscription_detector.py # Subscription detection
+│   │   ├── unsubscribe_processor.py # Unsubscribe attempt tracking
+│   │   └── unsubscribe/        # Unsubscribe extraction pipeline (NEW!)
+│   │       ├── __init__.py     # Clean API exports
+│   │       ├── constants.py    # Shared patterns and configuration
+│   │       ├── extractors.py   # Link extraction from headers/HTML/text
+│   │       ├── classifiers.py  # Method classification (GET/POST/email/one-click)
+│   │       ├── validators.py   # Security validation and safety checks
+│   │       └── processors.py   # Main pipeline and method management
+│   └── utils/           # Utility functions
+├── tests/               # Comprehensive test suite (132 tests)
+│   ├── test_basic.py                        # Basic functionality tests
+│   ├── test_credentials.py                  # Credential storage tests (24 tests - NEW!)
+│   ├── test_deduplication.py               # Database constraint tests
+│   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
+│   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
+│   ├── test_step1_subscription_creation.py # Subscription detection tests
+│   └── test_violations.py                  # Violation tracking tests
+├── docs/                # Documentation
+│   └── PROCESSING_RULES.md # Detailed unsubscribe extraction rules
+├── data/                # Database and data files (created automatically)
+│   └── email_passwords.json  # Stored credentials (excluded from git)
+├── main.py              # CLI entry point
+└── requirements.txt     # Python dependencies
+
+```plaintext
 
 ## Security Notes
 
