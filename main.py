@@ -69,6 +69,8 @@ def main():
         violations_command()
     elif command == 'list-subscriptions':
         list_subscriptions_command()
+    elif command == 'unsubscribe':
+        unsubscribe_command()
     elif command == 'store-password':
         store_password_command()
     elif command == 'remove-password':
@@ -98,6 +100,7 @@ Commands:
     detect-subscriptions <id>    Detect subscriptions for account (legacy)
     violations <account_id>      Show violation reports for account
     list-subscriptions <id>      List subscriptions for account [--keep=yes|no|all]
+    unsubscribe <sub_id>         Execute unsubscribe for a subscription [--dry-run] [--yes]
     
     store-password <email>       Store password for an email account
     remove-password <email>      Remove stored password for an email account
@@ -106,6 +109,8 @@ Commands:
 Options:
     --debug-storage              Store detailed extraction info (use with scan-analyze)
     --keep=yes|no|all            Filter subscriptions by keep status (default: all)
+    --dry-run                    Simulate unsubscribe without making actual request
+    --yes                        Skip confirmation prompt for unsubscribe
 
 Examples:
     python main.py init
@@ -119,6 +124,9 @@ Examples:
     python main.py list-subscriptions 1              # List all subscriptions
     python main.py list-subscriptions 1 --keep=yes   # Only kept subscriptions
     python main.py list-subscriptions 1 --keep=no    # Only non-kept subscriptions
+    python main.py unsubscribe 42 --dry-run          # Test unsubscribe without executing
+    python main.py unsubscribe 42                    # Execute unsubscribe (with confirmation)
+    python main.py unsubscribe 42 --yes              # Execute without confirmation
     """)
 
 
@@ -504,6 +512,109 @@ def list_subscriptions_command(session):
         print("Account ID must be a number")
     except Exception as e:
         print(f"Error listing subscriptions: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+@with_db_session
+def unsubscribe_command(session):
+    """Execute unsubscribe for a subscription."""
+    if len(sys.argv) < 3:
+        print("Usage: python main.py unsubscribe <subscription_id> [--dry-run] [--yes]")
+        return
+    
+    try:
+        subscription_id = int(sys.argv[2])
+        
+        # Parse flags
+        dry_run = '--dry-run' in sys.argv
+        skip_confirm = '--yes' in sys.argv
+        
+        # Get subscription
+        from src.database.models import Subscription, UnsubscribeAttempt
+        subscription = session.query(Subscription).filter_by(id=subscription_id).first()
+        
+        if not subscription:
+            print(f"Subscription {subscription_id} not found")
+            return
+        
+        # Display subscription info
+        print(f"\n{'='*80}")
+        print(f"Unsubscribe Request")
+        print(f"{'='*80}")
+        print(f"Subscription ID: {subscription.id}")
+        print(f"Sender:          {subscription.sender_email}")
+        print(f"Email Count:     {subscription.email_count}")
+        print(f"Keep Status:     {'YES (protected)' if subscription.keep_subscription else 'No'}")
+        print(f"Already Unsub:   {'Yes' if subscription.unsubscribed_at else 'No'}")
+        print(f"Unsub Link:      {subscription.unsubscribe_link or 'Not available'}")
+        print(f"Unsub Method:    {subscription.unsubscribe_method or 'Unknown'}")
+        
+        # Check for previous attempts
+        attempts = session.query(UnsubscribeAttempt).filter_by(
+            subscription_id=subscription_id
+        ).order_by(UnsubscribeAttempt.attempted_at.desc()).all()
+        
+        if attempts:
+            print(f"\nPrevious Attempts: {len(attempts)}")
+            for i, attempt in enumerate(attempts[:3], 1):  # Show last 3
+                print(f"  {i}. {attempt.attempted_at.strftime('%Y-%m-%d %H:%M')} - "
+                      f"{attempt.status} - {attempt.method_used}")
+                if attempt.error_message:
+                    print(f"     Error: {attempt.error_message[:60]}")
+        
+        print(f"{'='*80}")
+        
+        if dry_run:
+            print("\n[DRY RUN MODE] - No actual unsubscribe will be performed")
+        
+        # Import executor
+        from src.unsubscribe_executor.http_executor import HttpGetExecutor
+        executor = HttpGetExecutor(session, dry_run=dry_run)
+        
+        # Check if should execute
+        should_execute_result = executor.should_execute(subscription_id)
+        
+        if not should_execute_result['should_execute']:
+            print(f"\n❌ Cannot execute unsubscribe:")
+            print(f"   {should_execute_result['reason']}")
+            return
+        
+        # Confirmation prompt (unless --yes flag or dry-run)
+        if not skip_confirm and not dry_run:
+            print(f"\n⚠️  Are you sure you want to unsubscribe from '{subscription.sender_email}'?")
+            confirmation = input("Type 'yes' to confirm: ")
+            if confirmation.lower() != 'yes':
+                print("Unsubscribe cancelled")
+                return
+        
+        # Execute unsubscribe
+        print(f"\n{'Simulating' if dry_run else 'Executing'} unsubscribe...")
+        result = executor.execute(subscription_id)
+        
+        # Display results
+        print(f"\n{'='*80}")
+        if result['success']:
+            print(f"✅ Unsubscribe {'simulation' if dry_run else 'request'} successful!")
+            if result.get('status_code'):
+                print(f"   HTTP Status: {result['status_code']}")
+            if dry_run:
+                print(f"   Would have sent GET request to: {subscription.unsubscribe_link}")
+            else:
+                print(f"   Subscription marked as unsubscribed")
+                print(f"   Attempt recorded in database")
+        else:
+            print(f"❌ Unsubscribe {'simulation' if dry_run else 'request'} failed")
+            if result.get('error_message'):
+                print(f"   Error: {result['error_message']}")
+            if result.get('status_code'):
+                print(f"   HTTP Status: {result['status_code']}")
+        print(f"{'='*80}\n")
+        
+    except ValueError:
+        print("Subscription ID must be a number")
+    except Exception as e:
+        print(f"Error executing unsubscribe: {e}")
         import traceback
         traceback.print_exc()
 

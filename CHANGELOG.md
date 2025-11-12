@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2025-11-02
 
 ### Added
+
 - **Core Infrastructure (Phase 1 Complete)**
   - SQLAlchemy database models with comprehensive schema
   - IMAP client supporting major email providers (Gmail, Comcast, Outlook, Yahoo)
@@ -20,12 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Project documentation and setup instructions
 
 ### Database Schema
+
 - `accounts` table for email account information and IMAP settings
 - `email_messages` table for individual emails with metadata
 - `subscriptions` table (ready for Phase 2 implementation)
 - `unsubscribe_attempts` table (ready for Phase 3 implementation)
 
 ### CLI Commands
+
 - `init` - Initialize database
 - `add-account <email>` - Add email accounts with secure password prompting
 - `scan <account_id>` - Scan accounts for messages with configurable date ranges
@@ -33,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stats <account_id>` - Show detailed account statistics
 
 ### Technical Features
+
 - Secure password handling (not stored in database)
 - Batch processing for efficient large mailbox handling
 - Duplicate message detection and prevention
@@ -44,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2025-11-03
 
 ### Added - Phase 2: Subscription Detection & Violation Tracking ✅ COMPLETE
+
 - **Subscription Detection System**
   - `SubscriptionDetector` class with intelligent email pattern analysis
   - Deterministic confidence scoring algorithm (15-100 scale with bonus systems)
@@ -75,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Full Test-Driven Development approach with Red-Green-Refactor cycles
 
 ### Technical Improvements
+
 - Optimized UID deduplication with pre-filtering approach (90x performance improvement)
 - Enhanced confidence scoring with deterministic algorithms
 - Marketing keyword detection using word boundary matching to prevent false positives
@@ -82,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive error handling with graceful degradation
 
 ### Documentation Updates
+
 - Updated README.md with Phase 2 completion status and new features
 - Added Architecture section explaining the three-phase development approach
 - Enhanced CLI command documentation with examples
@@ -171,6 +178,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `remove-password <email>` - Remove stored password for an email account
 - `list-passwords` - List email accounts with stored passwords
 - `list-subscriptions <account_id>` - List subscriptions with filtering by keep status (`--keep=yes|no|all`)
+- `unsubscribe <subscription_id>` - Execute HTTP GET unsubscribe with safety confirmations (`--dry-run` for testing, `--yes` to skip confirmation)
+
+## [0.4.0] - 2025-11-12
+
+### Added - Phase 4: Unsubscribe Execution (HTTP GET) ✅ COMPLETE
+
+- **HTTP GET Unsubscribe Executor (TDD Implementation)**
+  - `HttpGetExecutor` class for automated HTTP GET unsubscribe requests
+  - Comprehensive safety validation system
+  - Rate limiting support with configurable delays
+  - Dry-run mode for safe testing
+  - Full attempt tracking and database integration
+
+- **Safety Checks & Validation**
+  - Prevents unsubscribing from subscriptions marked "keep"
+  - Skips already unsubscribed subscriptions
+  - Validates presence of unsubscribe link
+  - Verifies correct method type (http_get)
+  - Enforces maximum retry attempts to avoid excessive failures
+  - All checks with detailed reason messages
+
+- **HTTP Request Execution**
+  - Custom User-Agent headers (EmailSubscriptionManager/1.0)
+  - Configurable timeout (default 30 seconds)
+  - Automatic redirect following
+  - Handles 2xx status codes as success
+  - Comprehensive error handling for HTTP errors and network exceptions
+
+- **Database Integration**
+  - Records all attempts in `UnsubscribeAttempt` table
+  - Tracks status (success/failed), method, response code, error messages
+  - Updates `Subscription.unsubscribed_at` timestamp on success
+  - Updates `Subscription.unsubscribe_status` field
+  - Full audit trail of all unsubscribe actions
+
+- **Rate Limiting & Throttling**
+  - Configurable delay between requests
+  - Prevents overwhelming target servers
+  - Per-executor instance tracking
+
+- **CLI Unsubscribe Command**
+  - Interactive confirmation prompt ("Type 'yes' to confirm")
+  - Detailed subscription information display
+  - Shows previous attempt history (last 3 attempts)
+  - Safety check results with clear messages
+  - Success/failure reporting with HTTP status codes
+  - Support for `--dry-run` flag (simulation mode)
+  - Support for `--yes` flag (skip confirmation)
+
+- **Test Coverage**
+  - 14 comprehensive TDD tests for HTTP GET executor
+  - 6 safety check validation tests
+  - 6 execution and error handling tests
+  - Rate limiting test
+  - Dry-run mode test
+  - All 166 tests passing across entire codebase
+
+### Technical Implementation
+
+- Test-Driven Development (TDD) methodology
+- RED phase: 14 test specifications written first
+- GREEN phase: Implementation to pass all tests
+- REFACTOR phase: Clean code with proper separation of concerns
+
+### CLI Usage Examples
+
+```bash
+# Dry-run test (safe, no actual request)
+python main.py unsubscribe 8 --dry-run
+
+# Interactive unsubscribe (with confirmation)
+python main.py unsubscribe 8
+
+# Automatic unsubscribe (skip confirmation - use with caution!)
+python main.py unsubscribe 8 --yes
+```
 
 ### Planned for Future Phases
 

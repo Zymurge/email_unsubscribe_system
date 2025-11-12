@@ -147,6 +147,11 @@ py main.py detect-subscriptions 1    # Detect subscriptions for account ID 1
 ### List Subscriptions (New!)
 
 ```bash
+```
+
+### List Subscriptions
+
+```bash
 # List all subscriptions
 py main.py list-subscriptions 1
 
@@ -154,6 +159,52 @@ py main.py list-subscriptions 1
 py main.py list-subscriptions 1 --keep=yes    # Only kept subscriptions
 py main.py list-subscriptions 1 --keep=no     # Only non-kept (ready to unsubscribe)
 py main.py list-subscriptions 1 --keep=all    # All subscriptions (default)
+```
+
+Output shows:
+
+- Subscription ID, sender email, email count
+- Keep status (✓ for kept, blank otherwise)
+- Unsubscribed status (Yes/No)
+- Violation count (if unsubscribed)
+- Unsubscribe method available
+
+### Unsubscribe Execution (New!)
+
+```bash
+# Test unsubscribe (dry-run - safe, no actual request)
+py main.py unsubscribe 8 --dry-run
+
+# Execute unsubscribe (with confirmation prompt)
+py main.py unsubscribe 8
+
+# Execute without confirmation (use with caution!)
+py main.py unsubscribe 8 --yes
+```
+
+**Safety Features:**
+
+- ✅ Won't unsubscribe from subscriptions marked "keep"
+- ✅ Skips already unsubscribed subscriptions
+- ✅ Validates unsubscribe link exists
+- ✅ Shows detailed subscription info before executing
+- ✅ Requires confirmation (type 'yes')
+- ✅ Records all attempts in database
+- ✅ Supports dry-run mode for testing
+
+**What it shows:**
+
+- Subscription details (ID, sender, email count, keep status)
+- Previous attempt history (last 3 attempts with status)
+- Safety check results
+- HTTP status code and response
+- Success/failure with detailed messages
+
+### Manage Subscriptions (New!)
+
+```python
+# Mark subscriptions to keep (skip unsubscribe processing)
+```
 ```
 
 Output shows:
@@ -237,9 +288,10 @@ The system uses SQLite with the following main tables:
 ### Running Tests
 
 ```bash
-python -m pytest tests/                    # Run all 144 tests (132 + 12 new list-subscriptions tests)
-python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests - NEW!)
-python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests - NEW!)
+python -m pytest tests/                    # Run all 166 tests
+python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests - NEW!)
+python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests)
+python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests)
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
 python -m pytest tests/test_step1_subscription_creation.py # Run subscription detection tests
 python -m pytest tests/test_phase3_unsubscribe_extraction.py # Run Phase 3 unsubscribe tests (27 tests)
@@ -284,7 +336,7 @@ email_unsub_manager/
 │   └── email_passwords.json  # Stored credentials (excluded from git)
 ├── main.py              # CLI entry point
 └── requirements.txt     # Python dependencies
-```
+
 email_unsub_manager/
 ├── src/
 │   ├── config/          # Configuration management
@@ -321,8 +373,7 @@ email_unsub_manager/
 │   └── email_passwords.json  # Stored credentials (excluded from git)
 ├── main.py              # CLI entry point
 └── requirements.txt     # Python dependencies
-
-```plaintext
+```
 
 ## Security Notes
 
