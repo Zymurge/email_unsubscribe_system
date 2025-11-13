@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Added - Keep management
 
 - **Keep/Unkeep CLI Commands**
   - `keep` command to mark subscriptions as protected (skip unsubscribe)
@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2025-11-02
 
-### Added
+### Added - Phase 1
 
 - **Core Infrastructure (Phase 1 Complete)**
   - SQLAlchemy database models with comprehensive schema
