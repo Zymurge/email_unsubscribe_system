@@ -167,6 +167,37 @@ Output shows:
 - Violation count (if unsubscribed)
 - Unsubscribe method available
 
+### Manage Keep Status
+
+Mark subscriptions to protect them from unsubscribe operations (e.g., important services, legitimate newsletters you want to keep):
+
+```bash
+# Mark specific subscriptions to keep
+py main.py keep 1 2 3                    # By ID list
+py main.py keep 1,2,3                    # Comma-separated
+py main.py keep 10-20                    # By ID range
+py main.py keep --pattern %sutter%       # By SQL pattern (case-insensitive)
+py main.py keep --domain example.com     # By domain
+
+# Unmark subscriptions (make eligible for unsubscribe)
+py main.py unkeep 1 2 3                  # By ID list
+py main.py unkeep --pattern %newsletter% # By SQL pattern
+py main.py unkeep --domain spam.com      # By domain
+
+# Skip confirmation prompt (for automation)
+py main.py keep 1 2 3 --yes
+py main.py unkeep 4 5 6 --yes
+```
+
+**Features:**
+
+- ✅ Multiple matching modes (IDs, ranges, patterns, domains)
+- ✅ Shows preview of affected subscriptions
+- ✅ Requires confirmation (unless `--yes` flag used)
+- ✅ Idempotent operations (handles already kept/unkept gracefully)
+- ✅ SQL LIKE pattern matching with wildcards (%, _)
+- ✅ Domain matching with optional @ prefix
+
 ### Unsubscribe Execution
 
 Execute unsubscribe operations using HTTP GET, HTTP POST, or Email Reply methods. The system automatically selects the appropriate executor based on the subscription's unsubscribe method.
@@ -267,8 +298,9 @@ The system uses SQLite with the following main tables:
 ### Running Tests
 
 ```bash
-```bash
-python -m pytest tests/                    # Run all 204 tests
+python -m pytest tests/                    # Run all 248 tests
+python -m pytest tests/test_subscription_matcher.py # Run subscription matcher tests (29 tests)
+python -m pytest tests/test_keep_commands.py # Run keep/unkeep command tests (15 tests)
 python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests)
 python -m pytest tests/test_http_post_executor.py # Run HTTP POST executor tests (15 tests)
 python -m pytest tests/test_email_reply_executor.py # Run Email Reply executor tests (23 tests)
@@ -287,9 +319,10 @@ email_unsub_manager/
 │   ├── config/          # Configuration management
 │   │   ├── settings.py       # Environment configuration
 │   │   └── credentials.py    # Secure credential storage
-│   ├── database/        # Database models, management, and violation reporting
+│   ├── database/        # Database models, management, and matching
 │   │   ├── models.py    # SQLAlchemy models with keep_subscription flag
 │   │   ├── violations.py # Violation reporting system
+│   │   ├── subscription_matcher.py # Flexible subscription matching (29 tests)
 │   │   └── __init__.py  # Database initialization
 │   ├── email_processor/ # Email processing and subscription detection
 │   │   ├── imap_client.py      # IMAP connection handling
@@ -309,17 +342,19 @@ email_unsub_manager/
 │   │   ├── http_post_executor.py   # HTTP POST unsubscribe executor (RFC 8058)
 │   │   └── email_reply_executor.py # Email Reply unsubscribe executor (SMTP)
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (204 tests)
+├── tests/               # Comprehensive test suite (248 tests)
 │   ├── test_basic.py                        # Basic functionality tests
 │   ├── test_credentials.py                  # Credential storage tests (24 tests)
 │   ├── test_deduplication.py               # Database constraint tests
 │   ├── test_email_reply_executor.py        # Email Reply executor tests (23 tests)
 │   ├── test_http_get_executor.py           # HTTP GET executor tests (14 tests)
 │   ├── test_http_post_executor.py          # HTTP POST executor tests (15 tests)
+│   ├── test_keep_commands.py               # Keep/unkeep command tests (15 tests)
 │   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
 │   ├── test_list_subscriptions.py          # list-subscriptions tests (12 tests)
 │   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
 │   ├── test_step1_subscription_creation.py # Subscription detection tests
+│   ├── test_subscription_matcher.py        # Subscription matcher tests (29 tests)
 │   └── test_violations.py                  # Violation tracking tests
 ├── docs/                # Documentation
 │   └── PROCESSING_RULES.md # Detailed unsubscribe extraction rules

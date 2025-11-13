@@ -77,6 +77,10 @@ def main():
         remove_password_command()
     elif command == 'list-passwords':
         list_passwords_command()
+    elif command == 'keep':
+        keep_command()
+    elif command == 'unkeep':
+        unkeep_command()
     else:
         print(f"Unknown command: {command}")
         print_usage()
@@ -101,6 +105,8 @@ Commands:
     violations <account_id>      Show violation reports for account
     list-subscriptions <id>      List subscriptions for account [--keep=yes|no|all]
     unsubscribe <sub_id>         Execute unsubscribe for a subscription [--dry-run] [--yes]
+    keep <criteria>              Mark subscriptions to keep (skip unsubscribe) [--yes]
+    unkeep <criteria>            Unmark subscriptions (make eligible for unsubscribe) [--yes]
     
     store-password <email>       Store password for an email account
     remove-password <email>      Remove stored password for an email account
@@ -110,7 +116,9 @@ Options:
     --debug-storage              Store detailed extraction info (use with scan-analyze)
     --keep=yes|no|all            Filter subscriptions by keep status (default: all)
     --dry-run                    Simulate unsubscribe without making actual request
-    --yes                        Skip confirmation prompt for unsubscribe
+    --yes                        Skip confirmation prompt
+    --pattern <pattern>          SQL LIKE pattern for matching (use with keep/unkeep)
+    --domain <domain>            Domain name for matching (use with keep/unkeep)
 
 Examples:
     python main.py init
@@ -124,6 +132,12 @@ Examples:
     python main.py list-subscriptions 1              # List all subscriptions
     python main.py list-subscriptions 1 --keep=yes   # Only kept subscriptions
     python main.py list-subscriptions 1 --keep=no    # Only non-kept subscriptions
+    python main.py keep 1 2 3                        # Mark specific IDs as keep
+    python main.py keep 1-10                         # Mark range as keep
+    python main.py keep --pattern %sutter%           # Mark by pattern
+    python main.py keep --domain example.com --yes   # Mark by domain, skip confirm
+    python main.py unkeep 4 5 6                      # Unmark specific IDs
+    python main.py unkeep --pattern %newsletter%     # Unmark by pattern
     python main.py unsubscribe 42 --dry-run          # Test unsubscribe without executing
     python main.py unsubscribe 42                    # Execute unsubscribe (with confirmation)
     python main.py unsubscribe 42 --yes              # Execute without confirmation
@@ -722,6 +736,361 @@ def list_passwords_command():
         print(f"Total: {len(stored_emails)} account(s)")
     except Exception as e:
         print(f"Error listing passwords: {e}")
+
+
+@with_db_session
+def keep_command(session):
+    """
+    Mark subscriptions to keep (skip unsubscribe).
+    
+    Usage:
+        python main.py keep 1 2 3              # Mark IDs 1, 2, 3
+        python main.py keep 1,2,3              # Comma-separated
+        python main.py keep 1-10               # Range
+        python main.py keep --pattern %sutter% # Pattern matching
+        python main.py keep --domain example.com # Domain matching
+        python main.py keep 1 2 3 --yes        # Skip confirmation
+    """
+    from src.database.subscription_matcher import SubscriptionMatcher
+    from src.database.models import Subscription
+    
+    # Parse arguments
+    args = sys.argv[2:]
+    
+    # Extract flags
+    pattern = None
+    domain = None
+    yes_flag = False
+    ids_input = []
+    
+    skip_next = False
+    for i, arg in enumerate(args):
+        if skip_next:
+            skip_next = False
+            continue
+            
+        if arg == '--pattern':
+            if i + 1 < len(args):
+                pattern = args[i + 1]
+                skip_next = True
+        elif arg == '--domain':
+            if i + 1 < len(args):
+                domain = args[i + 1]
+                skip_next = True
+        elif arg == '--yes':
+            yes_flag = True
+        elif not arg.startswith('--'):
+            ids_input.append(arg)
+    
+    try:
+        # Parse input to determine matching mode
+        match_type, value = parse_keep_input(ids_input, pattern, domain)
+        
+        # Use matcher to get subscription IDs
+        matcher = SubscriptionMatcher(session)
+        
+        if match_type == 'ids':
+            subscription_ids = matcher.match_by_ids(value)
+        elif match_type == 'range':
+            subscription_ids = matcher.match_by_range(value[0], value[1])
+        elif match_type == 'pattern':
+            subscription_ids = matcher.match_by_pattern(value)
+        elif match_type == 'domain':
+            subscription_ids = matcher.match_by_domain(value)
+        else:
+            print(f"Error: Unknown match type: {match_type}")
+            return
+        
+        if not subscription_ids:
+            print("No subscriptions matched the criteria")
+            return
+        
+        # Fetch subscriptions for display
+        subscriptions = session.query(Subscription).filter(
+            Subscription.id.in_(subscription_ids)
+        ).all()
+        
+        print(f"\nFound {len(subscriptions)} subscription(s) to mark as keep:")
+        print("-" * 80)
+        for sub in subscriptions:
+            status = "ALREADY KEPT" if sub.keep_subscription else "will mark"
+            print(f"  ID {sub.id}: {sub.sender_email} ({sub.email_count} emails) [{status}]")
+        print("-" * 80)
+        
+        # Confirmation
+        if not yes_flag:
+            response = input("\nContinue and mark these subscriptions? (yes/no): ")
+            if response.lower() not in ['yes', 'y']:
+                print("Cancelled")
+                return
+        
+        # Mark subscriptions
+        result = mark_subscriptions_keep(session, subscription_ids)
+        
+        print(f"\n✓ Marked {result['marked']} subscription(s) to keep")
+        if result['already_kept'] > 0:
+            print(f"  ({result['already_kept']} already marked)")
+        
+    except ValueError as e:
+        print(f"Error: {e}")
+        print("\nUsage:")
+        print("  python main.py keep 1 2 3              # Mark specific IDs")
+        print("  python main.py keep 1-10               # Mark range")
+        print("  python main.py keep --pattern %sutter% # Pattern matching")
+        print("  python main.py keep --domain example.com # Domain matching")
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+@with_db_session
+def unkeep_command(session):
+    """
+    Unmark subscriptions (make eligible for unsubscribe).
+    
+    Usage:
+        python main.py unkeep 1 2 3              # Unmark IDs 1, 2, 3
+        python main.py unkeep 1,2,3              # Comma-separated
+        python main.py unkeep 1-10               # Range
+        python main.py unkeep --pattern %sutter% # Pattern matching
+        python main.py unkeep --domain example.com # Domain matching
+        python main.py unkeep 1 2 3 --yes        # Skip confirmation
+    """
+    from src.database.subscription_matcher import SubscriptionMatcher
+    from src.database.models import Subscription
+    
+    # Parse arguments
+    args = sys.argv[2:]
+    
+    # Extract flags
+    pattern = None
+    domain = None
+    yes_flag = False
+    ids_input = []
+    
+    skip_next = False
+    for i, arg in enumerate(args):
+        if skip_next:
+            skip_next = False
+            continue
+            
+        if arg == '--pattern':
+            if i + 1 < len(args):
+                pattern = args[i + 1]
+                skip_next = True
+        elif arg == '--domain':
+            if i + 1 < len(args):
+                domain = args[i + 1]
+                skip_next = True
+        elif arg == '--yes':
+            yes_flag = True
+        elif not arg.startswith('--'):
+            ids_input.append(arg)
+    
+    try:
+        # Parse input to determine matching mode
+        match_type, value = parse_keep_input(ids_input, pattern, domain)
+        
+        # Use matcher to get subscription IDs
+        matcher = SubscriptionMatcher(session)
+        
+        if match_type == 'ids':
+            subscription_ids = matcher.match_by_ids(value)
+        elif match_type == 'range':
+            subscription_ids = matcher.match_by_range(value[0], value[1])
+        elif match_type == 'pattern':
+            subscription_ids = matcher.match_by_pattern(value)
+        elif match_type == 'domain':
+            subscription_ids = matcher.match_by_domain(value)
+        else:
+            print(f"Error: Unknown match type: {match_type}")
+            return
+        
+        if not subscription_ids:
+            print("No subscriptions matched the criteria")
+            return
+        
+        # Fetch subscriptions for display
+        subscriptions = session.query(Subscription).filter(
+            Subscription.id.in_(subscription_ids)
+        ).all()
+        
+        print(f"\nFound {len(subscriptions)} subscription(s) to unmark (make eligible for unsubscribe):")
+        print("-" * 80)
+        for sub in subscriptions:
+            status = "will unmark" if sub.keep_subscription else "already not kept"
+            print(f"  ID {sub.id}: {sub.sender_email} ({sub.email_count} emails) [{status}]")
+        print("-" * 80)
+        
+        # Confirmation
+        if not yes_flag:
+            response = input("\nContinue and unmark these subscriptions? (yes/no): ")
+            if response.lower() not in ['yes', 'y']:
+                print("Cancelled")
+                return
+        
+        # Unmark subscriptions
+        result = mark_subscriptions_unkeep(session, subscription_ids)
+        
+        print(f"\n✓ Unmarked {result['unmarked']} subscription(s)")
+        if result['already_not_kept'] > 0:
+            print(f"  ({result['already_not_kept']} already not kept)")
+        
+    except ValueError as e:
+        print(f"Error: {e}")
+        print("\nUsage:")
+        print("  python main.py unkeep 1 2 3              # Unmark specific IDs")
+        print("  python main.py unkeep 1-10               # Unmark range")
+        print("  python main.py unkeep --pattern %sutter% # Pattern matching")
+        print("  python main.py unkeep --domain example.com # Domain matching")
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+def parse_keep_input(ids_input, pattern, domain):
+    """
+    Parse keep/unkeep command input to determine matching mode.
+    
+    Args:
+        ids_input: List of ID strings (e.g., ['1', '2', '3'] or ['1-10'] or ['1,2,3'])
+        pattern: SQL LIKE pattern (from --pattern flag)
+        domain: Domain name (from --domain flag)
+        
+    Returns:
+        Tuple of (match_type, value) where:
+            match_type is 'ids', 'range', 'pattern', or 'domain'
+            value is the parsed value for that type
+            
+    Raises:
+        ValueError: If input is invalid or conflicting
+    """
+    # Count how many input types provided
+    has_ids = bool(ids_input)
+    has_pattern = pattern is not None
+    has_domain = domain is not None
+    
+    input_count = sum([has_ids, has_pattern, has_domain])
+    
+    if input_count == 0:
+        raise ValueError("No input provided. Specify IDs, range, --pattern, or --domain")
+    
+    if input_count > 1:
+        raise ValueError("Cannot mix IDs/ranges with --pattern or --domain flags")
+    
+    # Pattern flag
+    if has_pattern:
+        return ('pattern', pattern)
+    
+    # Domain flag
+    if has_domain:
+        return ('domain', domain)
+    
+    # IDs or range
+    if has_ids:
+        # Single arg - could be comma-separated or range
+        if len(ids_input) == 1:
+            arg = ids_input[0]
+            
+            # Check for range format (1-10)
+            if '-' in arg and not arg.startswith('-'):
+                parts = arg.split('-')
+                if len(parts) == 2:
+                    try:
+                        start = int(parts[0])
+                        end = int(parts[1])
+                        return ('range', (start, end))
+                    except ValueError:
+                        pass  # Fall through to ID parsing
+                else:
+                    raise ValueError(f"Invalid range format: {arg}")
+            
+            # Check for comma-separated IDs
+            if ',' in arg:
+                try:
+                    id_list = [int(x.strip()) for x in arg.split(',')]
+                    return ('ids', id_list)
+                except ValueError:
+                    raise ValueError(f"Invalid ID list: {arg}")
+        
+        # Space-separated or single ID
+        try:
+            id_list = [int(x) for x in ids_input]
+            return ('ids', id_list)
+        except ValueError:
+            raise ValueError(f"Invalid ID values: {ids_input}")
+    
+    raise ValueError("Unable to parse input")
+
+
+def mark_subscriptions_keep(session, subscription_ids):
+    """
+    Mark subscriptions as keep (keep_subscription=True).
+    
+    Args:
+        session: Database session
+        subscription_ids: List of subscription IDs to mark
+        
+    Returns:
+        Dict with 'marked' and 'already_kept' counts
+    """
+    from src.database.models import Subscription
+    
+    if not subscription_ids:
+        return {'marked': 0, 'already_kept': 0}
+    
+    # Fetch subscriptions
+    subscriptions = session.query(Subscription).filter(
+        Subscription.id.in_(subscription_ids)
+    ).all()
+    
+    marked = 0
+    already_kept = 0
+    
+    for sub in subscriptions:
+        if sub.keep_subscription:
+            already_kept += 1
+        else:
+            sub.keep_subscription = True
+            marked += 1
+    
+    session.commit()
+    
+    return {'marked': marked, 'already_kept': already_kept}
+
+
+def mark_subscriptions_unkeep(session, subscription_ids):
+    """
+    Unmark subscriptions (keep_subscription=False).
+    
+    Args:
+        session: Database session
+        subscription_ids: List of subscription IDs to unmark
+        
+    Returns:
+        Dict with 'unmarked' and 'already_not_kept' counts
+    """
+    from src.database.models import Subscription
+    
+    if not subscription_ids:
+        return {'unmarked': 0, 'already_not_kept': 0}
+    
+    # Fetch subscriptions
+    subscriptions = session.query(Subscription).filter(
+        Subscription.id.in_(subscription_ids)
+    ).all()
+    
+    unmarked = 0
+    already_not_kept = 0
+    
+    for sub in subscriptions:
+        if not sub.keep_subscription:
+            already_not_kept += 1
+        else:
+            sub.keep_subscription = False
+            unmarked += 1
+    
+    session.commit()
+    
+    return {'unmarked': unmarked, 'already_not_kept': already_not_kept}
 
 
 if __name__ == '__main__':
