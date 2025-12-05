@@ -472,7 +472,7 @@ Deletion is permanent and dangerous. Require multiple confirmations:
 
 #### Confirmation Prompt Format
 
-```
+```text
 WARNING: This will permanently delete emails from your mailbox!
 
 Subscription: sender@example.com (ID: 42)
@@ -498,7 +498,7 @@ Type the subscription ID (42) to confirm deletion: _
 
 #### Dry-Run Output Format
 
-```
+```text
 DRY RUN: No emails will be deleted
 
 Subscription: sender@example.com (ID: 42)
@@ -632,7 +632,7 @@ python main.py delete-emails <subscription_id> --waiting-days 14
 
 #### Safety Check Display
 
-```
+```text
 Checking eligibility for email deletion...
 
 Subscription ID: 42
@@ -648,7 +648,7 @@ Eligible for deletion ✓
 
 #### Result Display
 
-```
+```text
 Deleting emails from IMAP...
 Progress: 50/150 emails deleted
 Progress: 100/150 emails deleted
