@@ -5,6 +5,86 @@ All notable changes to the Email Subscription Manager project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-12-04
+
+### Added - Phase 5: Email Deletion ✅ COMPLETE
+
+- **Email Deletion System**
+  - `EmailDeleter` class for safe email cleanup after successful unsubscribe
+  - Strict eligibility requirements with 6 safety checks
+  - Two-phase deletion: IMAP first, then database
+  - Preserves all post-unsubscribe emails (violation evidence)
+  - 26 comprehensive TDD tests covering all safety scenarios
+
+- **Safety Requirements (ALL must be met)**
+  - Subscription successfully unsubscribed
+  - Not marked as "keep"
+  - Waiting period elapsed (configurable, default 7 days)
+  - No violations present (preserves evidence)
+  - Has unsubscribe link
+  - Has unsubscribe date recorded
+
+- **Email Preservation Rules**
+  - Only deletes emails received BEFORE unsubscribe date
+  - Preserves ALL emails on or after unsubscribe (violation evidence)
+  - Maintains data integrity for legal compliance
+
+- **CLI Delete-Emails Command**
+  - Interactive command with detailed subscription display
+  - Shows eligibility check results with clear messaging
+  - Displays deletion preview (email counts, date ranges)
+  - Strong confirmation required (type subscription ID)
+  - `--yes` flag explicitly NOT allowed (safety requirement)
+  - `--dry-run` mode for safe preview
+  - `--waiting-days N` for custom waiting periods
+  - Updates subscription email count after deletion
+
+- **IMAP Deletion Features**
+  - Connects using stored credentials via CredentialStore
+  - Uses UID STORE command for reliable deletion
+  - Marks messages with \Deleted flag
+  - Expunges to permanently remove
+  - Comprehensive error handling for IMAP operations
+  - Continues on individual email failures
+
+- **Database Integration**
+  - Deletes EmailMessage records only after IMAP success
+  - Updates subscription.email_count to reflect remaining emails
+  - Transaction rollback on database errors
+  - Maintains referential integrity
+
+### CLI Usage Examples
+
+```bash
+# Preview what would be deleted (safe, no changes)
+python main.py delete-emails 42 --dry-run
+
+# Delete emails with confirmation (7-day waiting period)
+python main.py delete-emails 42
+
+# Custom waiting period (14 days)
+python main.py delete-emails 42 --waiting-days 14
+```
+
+### Test Coverage
+
+- Added 26 new tests for email deletion functionality
+- Total test count: 274 tests (all passing)
+- Test categories:
+  - 6 eligibility check tests
+  - 4 deletable email selection tests
+  - 3 dry-run mode tests
+  - 6 IMAP deletion tests
+  - 4 database update tests
+  - 3 error handling tests
+
+### Technical Implementation
+
+- Test-Driven Development (TDD) methodology
+- RED phase: 26 test specifications written first
+- GREEN phase: EmailDeleter implementation passing all tests
+- REFACTOR phase: CLI integration with user confirmation flow
+
 ## [0.1.0] - 2025-11-02
 
 ### Added - Phase 1

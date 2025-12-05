@@ -17,6 +17,7 @@ from src.database import init_database
 from src.email_processor.scanner import EmailScanner
 from src.email_processor.combined_scanner import CombinedEmailScanner
 from src.email_processor.subscription_detector import SubscriptionDetector
+from src.email_processor.email_deleter import EmailDeleter
 from src.database.violations import ViolationReporter
 from src.cli_session import get_cli_session_manager, with_db_session
 
@@ -81,6 +82,8 @@ def main():
         keep_command()
     elif command == 'unkeep':
         unkeep_command()
+    elif command == 'delete-emails':
+        delete_emails_command()
     else:
         print(f"Unknown command: {command}")
         print_usage()
@@ -105,6 +108,7 @@ Commands:
     violations <account_id>      Show violation reports for account
     list-subscriptions <id>      List subscriptions for account [--keep=yes|no|all]
     unsubscribe <sub_id>         Execute unsubscribe for a subscription [--dry-run] [--yes]
+    delete-emails <sub_id>       Delete emails from successfully unsubscribed subscription [--dry-run] [--waiting-days N]
     keep <criteria>              Mark subscriptions to keep (skip unsubscribe) [--yes]
     unkeep <criteria>            Unmark subscriptions (make eligible for unsubscribe) [--yes]
     
@@ -115,8 +119,9 @@ Commands:
 Options:
     --debug-storage              Store detailed extraction info (use with scan-analyze)
     --keep=yes|no|all            Filter subscriptions by keep status (default: all)
-    --dry-run                    Simulate unsubscribe without making actual request
-    --yes                        Skip confirmation prompt
+    --dry-run                    Simulate operation without making actual changes
+    --yes                        Skip confirmation prompt (not allowed for delete-emails)
+    --waiting-days N             Days to wait after unsubscribe before deletion (default: 7)
     --pattern <pattern>          SQL LIKE pattern for matching (use with keep/unkeep)
     --domain <domain>            Domain name for matching (use with keep/unkeep)
 
@@ -141,6 +146,9 @@ Examples:
     python main.py unsubscribe 42 --dry-run          # Test unsubscribe without executing
     python main.py unsubscribe 42                    # Execute unsubscribe (with confirmation)
     python main.py unsubscribe 42 --yes              # Execute without confirmation
+    python main.py delete-emails 42 --dry-run        # Preview what would be deleted
+    python main.py delete-emails 42                  # Delete old emails (requires confirmation)
+    python main.py delete-emails 42 --waiting-days 14 # Custom waiting period
     """)
 
 
@@ -1091,6 +1099,161 @@ def mark_subscriptions_unkeep(session, subscription_ids):
     session.commit()
     
     return {'unmarked': unmarked, 'already_not_kept': already_not_kept}
+
+
+@with_db_session
+def delete_emails_command(session):
+    """
+    Delete emails from a successfully unsubscribed subscription.
+    
+    Safety features:
+    - Only deletes from unsubscribed subscriptions
+    - Requires waiting period (default 7 days)
+    - Preserves post-unsubscribe emails (violation evidence)
+    - Never deletes if marked "keep" or has violations
+    - Strong confirmation required (no --yes bypass)
+    - Dry-run mode for safe preview
+    """
+    from src.database.models import Subscription
+    
+    if len(sys.argv) < 3:
+        print("Usage: python main.py delete-emails <subscription_id> [--dry-run] [--waiting-days N]")
+        return
+    
+    try:
+        subscription_id = int(sys.argv[2])
+    except ValueError:
+        print("Error: subscription_id must be an integer")
+        return
+    
+    # Parse options
+    dry_run = '--dry-run' in sys.argv
+    waiting_days = 7  # Default
+    
+    for i, arg in enumerate(sys.argv):
+        if arg == '--waiting-days' and i + 1 < len(sys.argv):
+            try:
+                waiting_days = int(sys.argv[i + 1])
+                if waiting_days < 0:
+                    print("Error: waiting-days must be non-negative")
+                    return
+            except ValueError:
+                print("Error: waiting-days must be an integer")
+                return
+    
+    # --yes flag is NOT allowed for delete operations (safety requirement)
+    if '--yes' in sys.argv:
+        print("Error: --yes flag not allowed for delete-emails (safety requirement)")
+        print("You must manually confirm deletion operations.")
+        return
+    
+    # Get subscription
+    subscription = session.query(Subscription).filter_by(id=subscription_id).first()
+    
+    if not subscription:
+        print(f"Error: Subscription {subscription_id} not found")
+        return
+    
+    # Create deleter
+    deleter = EmailDeleter(session, waiting_days=waiting_days)
+    
+    # Check eligibility
+    eligible, reason = deleter.is_eligible_for_deletion(subscription)
+    
+    print("="*90)
+    print(f"Email Deletion {'Preview' if dry_run else 'Operation'}")
+    print("="*90)
+    print()
+    print(f"Subscription ID: {subscription.id}")
+    print(f"Sender: {subscription.sender_email}")
+    print(f"Total Emails: {subscription.email_count}")
+    print(f"Keep Status: {'✓ MARKED TO KEEP' if subscription.keep_subscription else 'not kept'}")
+    print(f"Unsubscribe Status: {subscription.unsubscribe_status or 'not unsubscribed'}")
+    
+    if subscription.unsubscribed_at:
+        from datetime import datetime
+        days_since = (datetime.now() - subscription.unsubscribed_at).days
+        print(f"Unsubscribed: {subscription.unsubscribed_at.strftime('%Y-%m-%d')} ({days_since} days ago)")
+    else:
+        print("Unsubscribed: never")
+    
+    print(f"Violations: {subscription.violation_count}")
+    print(f"Waiting Period: {waiting_days} days")
+    print()
+    
+    # Display eligibility check
+    print("Eligibility Check:")
+    print("-" * 90)
+    
+    if eligible:
+        print(f"✓ {reason}")
+    else:
+        print(f"✗ {reason}")
+        print()
+        print("Cannot delete emails. Address the issues above.")
+        return
+    
+    print()
+    
+    # Execute deletion (dry-run or real)
+    result = deleter.delete_subscription_emails(subscription, dry_run=dry_run)
+    
+    # Display results
+    print("Deletion Summary:")
+    print("-" * 90)
+    
+    if result.dry_run:
+        print("[DRY RUN MODE - No actual changes made]")
+        print()
+    
+    print(f"Emails to DELETE: {result.emails_to_delete}")
+    if result.oldest_email_date and result.newest_email_date:
+        print(f"  Date range: {result.oldest_email_date.strftime('%Y-%m-%d')} to {result.newest_email_date.strftime('%Y-%m-%d')}")
+        print(f"  (All emails received BEFORE unsubscribe date)")
+    
+    print(f"Emails to PRESERVE: {result.emails_to_preserve}")
+    if subscription.unsubscribed_at:
+        print(f"  (All emails on or after {subscription.unsubscribed_at.strftime('%Y-%m-%d')})")
+    
+    print()
+    
+    if result.emails_to_delete == 0:
+        print("No emails to delete.")
+        return
+    
+    # Confirmation required for non-dry-run
+    if not dry_run:
+        print("⚠️  WARNING: This will PERMANENTLY delete emails from your mailbox!")
+        print("⚠️  This operation CANNOT be undone!")
+        print()
+        print(f"Type the subscription ID ({subscription_id}) to confirm deletion: ", end='')
+        
+        confirmation = input().strip()
+        
+        if confirmation != str(subscription_id):
+            print()
+            print("Deletion cancelled (confirmation did not match).")
+            return
+        
+        print()
+        print("Deleting emails...")
+        
+        # Actually perform deletion
+        result = deleter.delete_subscription_emails(subscription, dry_run=False)
+        
+        print()
+        
+        if result.success:
+            print("✓ Deletion completed successfully")
+            print(f"  Deleted: {result.emails_deleted} emails")
+            print(f"  Preserved: {result.emails_to_preserve} emails")
+            print(f"  Updated subscription email count: {subscription.email_count} → {result.emails_to_preserve}")
+        else:
+            print("✗ Deletion failed")
+            print(f"  Error: {result.message}")
+    else:
+        print("Dry-run complete. Use without --dry-run to actually delete emails.")
+        print(f"Remember: You must type the subscription ID ({subscription_id}) to confirm.")
 
 
 if __name__ == '__main__':
