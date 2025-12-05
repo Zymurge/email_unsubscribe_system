@@ -5,44 +5,6 @@ All notable changes to the Email Subscription Manager project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added - Keep management
-
-- **Keep/Unkeep CLI Commands**
-  - `keep` command to mark subscriptions as protected (skip unsubscribe)
-  - `unkeep` command to remove protection and make subscriptions eligible for unsubscribe
-  - Support for multiple matching modes:
-    - ID list: `keep 1 2 3` or `keep 1,2,3`
-    - ID range: `keep 1-10`
-    - SQL pattern: `keep --pattern %sutter%`
-    - Domain matching: `keep --domain example.com`
-  - `--yes` flag to skip confirmation prompts for automation
-  - Visual confirmation display showing affected subscriptions
-  - Idempotent operations (already kept/unkept subscriptions handled gracefully)
-
-- **SubscriptionMatcher Module**
-  - Flexible subscription matching with four methods:
-    - `match_by_ids()` - Match specific subscription IDs with validation
-    - `match_by_range()` - Match ID ranges with auto-correction for reversed ranges
-    - `match_by_pattern()` - SQL LIKE pattern matching (case-insensitive)
-    - `match_by_domain()` - Domain-based matching with optional @ prefix
-  - Comprehensive test coverage (29 tests)
-
-### Changed
-
-- Enhanced CLI help text with keep/unkeep command examples
-- Updated list-subscriptions display to show [✓] checkmark for kept subscriptions
-
-### Test Coverage
-
-- Added 44 new tests for keep/unkeep functionality
-- Total test count: 248 tests (all passing)
-- Test categories:
-  - 29 SubscriptionMatcher unit tests
-  - 15 keep/unkeep helper function tests
-  - Manual verification with real database
-
 ## [0.1.0] - 2025-11-02
 
 ### Added - Phase 1
@@ -134,6 +96,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added comprehensive test coverage information and TDD methodology notes
 
 ## [Unreleased]
+
+### Fixed - Database Schema Alignment (2025-12-04)
+
+- **Test Suite Corrections**
+  - Fixed all field name references in `test_delete_emails.py` to match actual database schema
+  - Updated `Account` model references: `email` → `email_address`, `imap_host` → `imap_server`
+  - Updated `Subscription` model references: `confidence` → `confidence_score`
+  - Updated `EmailMessage` model references: `sender` → `sender_email`, `received_date` → `date_sent`
+  - Removed references to non-existent `subscription_id` field in EmailMessage
+  - Changed UID field from string to integer type
+  - Added proper `CredentialStore` and `IMAPConnection` mocking in all tests
+  - All 274 tests now passing
+
+- **Database Relationship Clarification**
+  - EmailMessage links to Subscription through `sender_email` and `account_id` matching, not a direct foreign key
+  - Updated queries to use proper relationship fields instead of non-existent `subscription_id`
 
 ### In Progress
 
@@ -330,6 +308,44 @@ python main.py unsubscribe 8 --yes
 - Unsubscribe attempt tracking and success/failure reporting
 - Rate limiting and safety validation checks
 - Integration with violation tracking for effectiveness monitoring
+
+## [0.5.0] - 2025-11-11
+
+### Added - Keep management
+
+- **Keep/Unkeep CLI Commands**
+  - `keep` command to mark subscriptions as protected (skip unsubscribe)
+  - `unkeep` command to remove protection and make subscriptions eligible for unsubscribe
+  - Support for multiple matching modes:
+    - ID list: `keep 1 2 3` or `keep 1,2,3`
+    - ID range: `keep 1-10`
+    - SQL pattern: `keep --pattern %sutter%`
+    - Domain matching: `keep --domain example.com`
+  - `--yes` flag to skip confirmation prompts for automation
+  - Visual confirmation display showing affected subscriptions
+  - Idempotent operations (already kept/unkept subscriptions handled gracefully)
+
+- **SubscriptionMatcher Module**
+  - Flexible subscription matching with four methods:
+    - `match_by_ids()` - Match specific subscription IDs with validation
+    - `match_by_range()` - Match ID ranges with auto-correction for reversed ranges
+    - `match_by_pattern()` - SQL LIKE pattern matching (case-insensitive)
+    - `match_by_domain()` - Domain-based matching with optional @ prefix
+  - Comprehensive test coverage (29 tests)
+
+### Changed
+
+- Enhanced CLI help text with keep/unkeep command examples
+- Updated list-subscriptions display to show [✓] checkmark for kept subscriptions
+
+### Test Coverage
+
+- Added 44 new tests for keep/unkeep functionality
+- Total test count: 248 tests (all passing)
+- Test categories:
+  - 29 SubscriptionMatcher unit tests
+  - 15 keep/unkeep helper function tests
+  - Manual verification with real database
 
 ## Project Development Methodology
 

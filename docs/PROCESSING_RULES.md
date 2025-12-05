@@ -348,12 +348,14 @@ if last_request_time is not None:
 
 #### Attempt Record Fields
 
-- `subscription_id`: Link to parent subscription
+- `subscription_id`: Foreign key to parent subscription
 - `method_used`: 'http_get', 'http_post', or 'email_reply'
 - `status`: 'success' or 'failed'
 - `attempted_at`: Timestamp of attempt
 - `response_code`: HTTP status code (for HTTP methods)
 - `error_message`: Error details (for failures)
+
+**Note**: EmailMessage does NOT have a subscription_id field. The relationship between EmailMessage and Subscription is established through matching `sender_email` and `account_id`.
 
 ### CLI Command Rules (Phase 4)
 
@@ -382,6 +384,302 @@ if last_request_time is not None:
 - Failure: Show error message and status codes
 - Dry-run: Clearly indicate simulation mode
 - Database: Confirm attempt recorded
+
+---
+
+## Phase 5: Email Deletion Rules
+
+### Email Deletion Eligibility Rules
+
+#### **RULE: Strict Safety Requirements for Deletion**
+
+All of the following conditions MUST be met before any emails can be deleted:
+
+1. **Successful Unsubscribe**: `subscription.unsubscribe_status = 'unsubscribed'`
+2. **Not Marked Keep**: `subscription.keep_subscription = False`
+3. **Has Unsubscribe Date**: `subscription.unsubscribed_at` is not None
+4. **Waiting Period Elapsed**: At least X days since unsubscribe (configurable, default 7 days)
+5. **No Violations**: `subscription.violation_count = 0` (preserve evidence)
+6. **Has Unsubscribe Link**: `subscription.unsubscribe_link` is not empty
+
+#### Eligibility Check Function
+
+```python
+def is_eligible_for_deletion(subscription, waiting_days: int = 7) -> tuple[bool, str]:
+    """
+    Check if subscription is eligible for email deletion.
+    Returns (eligible, reason) tuple.
+    """
+    if subscription.keep_subscription:
+        return False, "Subscription marked to keep"
+    
+    if subscription.unsubscribe_status != 'unsubscribed':
+        return False, "Not unsubscribed"
+    
+    if subscription.unsubscribed_at is None:
+        return False, "No unsubscribe date recorded"
+    
+    if subscription.violation_count > 0:
+        return False, f"Has {subscription.violation_count} violations (preserve evidence)"
+    
+    days_since_unsubscribe = (datetime.now() - subscription.unsubscribed_at).days
+    if days_since_unsubscribe < waiting_days:
+        return False, f"Waiting period not elapsed ({days_since_unsubscribe}/{waiting_days} days)"
+    
+    if not subscription.unsubscribe_link:
+        return False, "No unsubscribe link available"
+    
+    return True, "Eligible for deletion"
+```
+
+### Email Deletion Scope Rules
+
+#### **RULE: Only Delete Pre-Unsubscribe Emails**
+
+- **Delete**: Emails where `email.received_date < subscription.unsubscribed_at`
+- **Preserve**: ALL emails where `email.received_date >= subscription.unsubscribed_at`
+- **Purpose**: Keep violation evidence and post-unsubscribe correspondence
+
+#### Date Comparison Logic
+
+```python
+def get_deletable_emails(subscription, session):
+    """
+    Returns emails that can be safely deleted.
+    Only includes emails received BEFORE unsubscribe.
+    
+    Note: EmailMessage links to Subscription through sender_email
+    and account_id matching, not through a subscription_id field.
+    """
+    return session.query(EmailMessage).filter(
+        EmailMessage.account_id == subscription.account_id,
+        EmailMessage.sender_email == subscription.sender_email,
+        EmailMessage.date_sent < subscription.unsubscribed_at
+    ).all()
+```
+
+### User Confirmation Rules
+
+#### **RULE: Strong Confirmation Required**
+
+Deletion is permanent and dangerous. Require multiple confirmations:
+
+1. **Display Preview**: Show subscription details and email count to be deleted
+2. **Show Date Range**: Display oldest to newest deletable email dates
+3. **Preserve Count**: Show count of emails that will be preserved
+4. **Type Confirmation**: User must type subscription ID OR "DELETE ALL" to confirm
+5. **No --yes Flag**: `--yes` flag MUST NOT skip confirmation for delete operations
+
+#### Confirmation Prompt Format
+
+```
+WARNING: This will permanently delete emails from your mailbox!
+
+Subscription: sender@example.com (ID: 42)
+Unsubscribed: 2025-11-05
+Waiting period: 7 days (elapsed: 11 days)
+
+Emails to DELETE: 150 emails (2025-01-15 to 2025-11-04)
+Emails to PRESERVE: 3 emails (after 2025-11-05)
+
+Type the subscription ID (42) to confirm deletion: _
+```
+
+### Dry-Run Mode Rules
+
+#### **RULE: Safe Preview Without Deletion**
+
+- **Purpose**: Preview what would be deleted without making changes
+- **CLI Flag**: `--dry-run` enables preview mode
+- **Output**: Show detailed list of emails that would be deleted
+- **Database**: NO updates to database
+- **IMAP**: NO connection or deletion operations
+- **Display**: Show first 10 and last 10 emails with dates/subjects
+
+#### Dry-Run Output Format
+
+```
+DRY RUN: No emails will be deleted
+
+Subscription: sender@example.com (ID: 42)
+Deletable emails: 150 (before 2025-11-05)
+Preserved emails: 3 (on or after 2025-11-05)
+
+Sample emails to delete (first 10):
+  UID 1001: "Special Offer!" (2025-01-15)
+  UID 1045: "Weekly Newsletter" (2025-01-22)
+  ...
+
+Sample emails to delete (last 10):
+  UID 8921: "Final Sale" (2025-10-28)
+  UID 9012: "Last Chance" (2025-11-04)
+  ...
+```
+
+### IMAP Deletion Rules
+
+#### **RULE: Two-Phase Deletion Process**
+
+Email deletion in IMAP requires two steps:
+
+1. **Mark for Deletion**: Set `\Deleted` flag on messages
+2. **Expunge**: Permanently remove messages marked for deletion
+
+#### Deletion Implementation
+
+```python
+def delete_emails_from_imap(account, email_uids):
+    """
+    Delete emails from IMAP server.
+    Returns (success_count, failure_count, errors)
+    """
+    imap_client = connect_to_imap(account)
+    
+    success_count = 0
+    failure_count = 0
+    errors = []
+    
+    for uid in email_uids:
+        try:
+            # Mark message for deletion
+            imap_client.store(uid, '+FLAGS', '\\Deleted')
+            success_count += 1
+        except Exception as e:
+            failure_count += 1
+            errors.append(f"UID {uid}: {str(e)}")
+    
+    # Permanently remove marked messages
+    imap_client.expunge()
+    
+    return success_count, failure_count, errors
+```
+
+#### Error Handling
+
+- **Individual Failures**: Continue processing remaining emails if one fails
+- **Connection Errors**: Fail gracefully, preserve database integrity
+- **Partial Success**: Report counts of successful vs failed deletions
+- **Retry Logic**: Do NOT auto-retry - require user to re-run command
+
+### Database Update Rules
+
+#### **RULE: Delete Database Records After IMAP Success**
+
+- **Phase 1**: Delete emails from IMAP server first
+- **Phase 2**: Delete EmailMessage records from database only if IMAP succeeds
+- **Transaction**: Use database transaction for atomicity
+- **Subscription**: Keep subscription record, only delete email records
+
+#### Deletion Order
+
+```python
+def delete_subscription_emails(subscription, session, imap_client):
+    """
+    Delete emails in safe order: IMAP first, then database.
+    """
+    deletable_emails = get_deletable_emails(subscription, session)
+    email_uids = [email.uid for email in deletable_emails]
+    
+    # Step 1: Delete from IMAP
+    success_count, failure_count, errors = delete_emails_from_imap(
+        subscription.account, email_uids
+    )
+    
+    if failure_count > 0:
+        return False, f"IMAP deletion failed for {failure_count} emails"
+    
+    # Step 2: Delete from database (only if IMAP succeeded)
+    try:
+        for email in deletable_emails:
+            session.delete(email)
+        session.commit()
+        return True, f"Deleted {success_count} emails successfully"
+    except Exception as e:
+        session.rollback()
+        return False, f"Database deletion failed: {str(e)}"
+```
+
+#### Subscription Record Updates
+
+- **Update email_count**: Recalculate based on remaining emails
+- **Keep subscription**: Do NOT delete subscription record
+- **Preserve metadata**: Keep all subscription fields intact
+- **Update last_modified**: Record when deletion occurred
+
+### Rate Limiting Rules
+
+#### **RULE: Prevent IMAP Server Overload**
+
+- **Batch Size**: Delete in batches of 50 emails
+- **Delay Between Batches**: Wait 1 second between batches
+- **Total Limit**: Configurable max emails per command (default 1000)
+- **Progress Display**: Show progress every 50 emails
+
+### CLI Command Rules
+
+#### Command Syntax
+
+```bash
+# Dry-run to preview what would be deleted
+python main.py delete-emails <subscription_id> --dry-run
+
+# Interactive deletion with confirmation
+python main.py delete-emails <subscription_id>
+
+# Specify custom waiting period (default 7 days)
+python main.py delete-emails <subscription_id> --waiting-days 14
+```
+
+#### Safety Check Display
+
+```
+Checking eligibility for email deletion...
+
+Subscription ID: 42
+Sender: sender@example.com
+Status: unsubscribed ✓
+Unsubscribed: 2025-11-05 (11 days ago) ✓
+Keep flag: not set ✓
+Violations: 0 ✓
+Waiting period: 7 days ✓
+
+Eligible for deletion ✓
+```
+
+#### Result Display
+
+```
+Deleting emails from IMAP...
+Progress: 50/150 emails deleted
+Progress: 100/150 emails deleted
+Progress: 150/150 emails deleted
+
+IMAP deletion: 150 emails deleted successfully
+
+Updating database...
+Database: 150 email records deleted
+
+Summary:
+- Deleted: 150 emails (2025-01-15 to 2025-11-04)
+- Preserved: 3 emails (after 2025-11-05)
+- Updated email count: 153 → 3
+```
+
+### Error Recovery Rules
+
+#### **RULE: Preserve Database Integrity**
+
+- **IMAP Failure**: Do NOT delete database records if IMAP fails
+- **Partial IMAP Success**: Only delete database records for successfully deleted IMAP emails
+- **Database Failure**: Report error, allow manual cleanup
+- **Network Errors**: Fail gracefully, provide clear error messages
+
+#### Error Messages
+
+- Connection errors: "Could not connect to IMAP server: [details]"
+- Authentication errors: "IMAP authentication failed for [account]"
+- Permission errors: "No permission to delete emails from folder"
+- Partial failures: "Deleted X of Y emails, Z failed: [error details]"
 
 ---
 
@@ -483,6 +781,18 @@ if last_request_time is not None:
 ---
 
 ## Changelog
+
+### Phase 5 (November 2025)
+
+- Added email deletion rules for cleaning up after successful unsubscribe
+- Defined strict eligibility requirements (unsubscribed, waiting period, no violations)
+- Added "preserve violations" rule to keep evidence of post-unsubscribe emails
+- Defined two-phase IMAP deletion process (mark + expunge)
+- Added strong user confirmation requirements (no --yes flag allowed)
+- Defined dry-run mode for safe preview
+- Added rate limiting for IMAP operations
+- Defined database update rules (IMAP first, then database)
+- Added error recovery and partial failure handling
 
 ### Phase 4 (November 2025)
 

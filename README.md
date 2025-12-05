@@ -246,6 +246,62 @@ py main.py unsubscribe 8 --yes
 py main.py violations 1              # View unsubscribe violations for account ID 1
 ```
 
+### Delete Subscription Emails
+
+⚠️ **WARNING: This permanently deletes emails from your mailbox!**
+
+After successfully unsubscribing and waiting for a grace period, you can delete old marketing emails to reclaim mailbox space. This feature includes multiple safety checks to prevent accidental deletion.
+
+```bash
+# Preview what would be deleted (safe, no actual deletion)
+py main.py delete-emails 42 --dry-run
+
+# Delete emails with interactive confirmation
+py main.py delete-emails 42
+
+# Specify custom waiting period (default 7 days)
+py main.py delete-emails 42 --waiting-days 14
+```
+
+**Strict Safety Requirements** (ALL must be met):
+
+- ✅ Subscription must be successfully unsubscribed
+- ✅ Subscription cannot be marked as "keep"
+- ✅ Waiting period must have elapsed (default 7 days since unsubscribe)
+- ✅ Subscription must have NO violations (preserves evidence)
+- ✅ Must have valid unsubscribe link recorded
+
+**What Gets Deleted:**
+
+- ✅ Emails received **BEFORE** the unsubscribe date
+- ❌ Emails received **AFTER** unsubscribe are **PRESERVED** (violation evidence)
+
+**Safety Features:**
+
+- 🔒 Strong confirmation required (type subscription ID to confirm)
+- 🔒 No `--yes` flag support (prevents accidental automation)
+- 🔒 Dry-run mode to preview before deleting
+- 🔒 Two-phase deletion (IMAP first, then database)
+- 🔒 Preserves all post-unsubscribe emails
+- 🔒 Preserves subscription record and metadata
+- 🔒 Rate limiting to prevent server overload
+- 🔒 Error recovery for partial failures
+
+**Example Output:**
+
+```
+WARNING: This will permanently delete emails from your mailbox!
+
+Subscription: newsletters@example.com (ID: 42)
+Unsubscribed: 2025-11-05
+Waiting period: 7 days (elapsed: 11 days) ✓
+
+Emails to DELETE: 150 emails (2025-01-15 to 2025-11-04)
+Emails to PRESERVE: 3 emails (after 2025-11-05)
+
+Type the subscription ID (42) to confirm deletion: _
+```
+
 ### Unsubscribe Processing (Phase 3)
 
 ```python
@@ -276,9 +332,12 @@ result = processor.process_email_for_unsubscribe_methods(
 The system uses SQLite with the following main tables:
 
 - **accounts**: Email account information and IMAP settings
-- **email_messages**: Individual emails with metadata and unsubscribe indicators  
+  - Fields: `email_address`, `provider`, `imap_server`, `imap_port`, `use_ssl`
+- **email_messages**: Individual emails with metadata and unsubscribe indicators
+  - Links to subscriptions via `sender_email` and `account_id` (no direct foreign key)
+  - Fields include: `sender_email`, `date_sent`, `uid`, `message_id`
 - **subscriptions**: Detected subscriptions with confidence scoring and violation tracking
-  - Confidence scoring (15-100 scale)
+  - Confidence scoring (15-100 scale via `confidence_score` field)
   - Marketing keyword detection
   - Unsubscribe status and violation monitoring
   - Email count and date tracking
@@ -298,12 +357,13 @@ The system uses SQLite with the following main tables:
 ### Running Tests
 
 ```bash
-python -m pytest tests/                    # Run all 248 tests
+python -m pytest tests/                    # Run all 274 tests
 python -m pytest tests/test_subscription_matcher.py # Run subscription matcher tests (29 tests)
 python -m pytest tests/test_keep_commands.py # Run keep/unkeep command tests (15 tests)
 python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests)
 python -m pytest tests/test_http_post_executor.py # Run HTTP POST executor tests (15 tests)
 python -m pytest tests/test_email_reply_executor.py # Run Email Reply executor tests (23 tests)
+python -m pytest tests/test_delete_emails.py # Run email deletion tests (26 tests)
 python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests)
 python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests)
 python -m pytest tests/test_violations.py  # Run violation tracking tests  
@@ -342,7 +402,7 @@ email_unsub_manager/
 │   │   ├── http_post_executor.py   # HTTP POST unsubscribe executor (RFC 8058)
 │   │   └── email_reply_executor.py # Email Reply unsubscribe executor (SMTP)
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (248 tests)
+├── tests/               # Comprehensive test suite (274 tests)
 │   ├── test_basic.py                        # Basic functionality tests
 │   ├── test_credentials.py                  # Credential storage tests (24 tests)
 │   ├── test_deduplication.py               # Database constraint tests
@@ -392,5 +452,13 @@ email_unsub_manager/
   - [x] Interactive CLI command with confirmations
   - [x] Full attempt tracking and database integration
   - [x] Full TDD methodology with 52 comprehensive tests (14 GET + 15 POST + 23 Email)
-- [ ] **Phase 5**: Web interface and reporting
-- [ ] **Phase 6**: OAuth support for major providers
+- [ ] **Phase 5**: Email deletion and cleanup
+  - [ ] Delete old marketing emails after successful unsubscribe
+  - [ ] Multiple safety checks (waiting period, no violations, not kept)
+  - [ ] Preserve post-unsubscribe emails (violation evidence)
+  - [ ] Strong confirmation requirements
+  - [ ] Dry-run preview mode
+  - [ ] Two-phase deletion (IMAP + database)
+  - [ ] TDD methodology with comprehensive test coverage
+- [ ] **Phase 6**: Web interface and reporting
+- [ ] **Phase 7**: OAuth support for major providers
