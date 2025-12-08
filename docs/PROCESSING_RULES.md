@@ -133,6 +133,21 @@ When a single email contains multiple unsubscribe methods:
 - Requires HTML form context with `method="post"`
 - Extract form action URL and hidden input fields
 - Parse form data for required parameters
+- **Form Complexity Analysis**: Detects forms requiring manual user intervention
+  - Identifies checkboxes, radio buttons, and select dropdowns
+  - Detects user choice text patterns ("select which", "choose", "continue receiving")
+  - Reclassifies complex forms as `manual_intervention` method
+
+#### Manual Intervention Classification
+
+- Applied when HTTP POST forms require user selections beyond simple submission
+- Triggered by presence of:
+  - Checkboxes (`<input type="checkbox">`)
+  - Radio buttons (`<input type="radio">`) 
+  - Select dropdowns with multiple options (`<select>` with >2 `<option>` elements)
+  - User choice text patterns in form content
+- Logged with complexity reason for user awareness
+- Prevents automated execution that would fail or be incomplete
 
 #### Email Reply Classification
 

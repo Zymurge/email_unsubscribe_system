@@ -281,6 +281,93 @@ class TestUnsubscribeMethodClassifier:
         # Should prioritize POST over GET when form is present
         assert method_info['method'] == 'http_post'
         assert 'token' in method_info['url_parameters']  # But should still extract GET params
+    
+    def test_form_complexity_detection(self):
+        """Test detection of forms requiring manual user intervention."""
+        classifier = UnsubscribeMethodClassifier()
+        
+        # SCENARIO 1: Simple form with hidden inputs (should NOT require manual intervention)
+        simple_form = '''
+        <form method="post" action="https://example.com/unsubscribe">
+            <input type="hidden" name="user_id" value="123">
+            <input type="hidden" name="token" value="abc">
+        </form>
+        '''
+        
+        complexity = classifier._analyze_form_complexity(simple_form)
+        assert complexity['requires_manual_intervention'] is False
+        assert complexity['complexity_reason'] == 'simple_form'
+        
+        # SCENARIO 2: Form with checkboxes (requires manual intervention)
+        checkbox_form = '''
+        <form method="post" action="https://example.com/preferences">
+            <input type="hidden" name="user_id" value="123">
+            <input type="checkbox" name="newsletter" value="1"> Keep newsletter
+            <input type="checkbox" name="promotions" value="1"> Keep promotions
+        </form>
+        '''
+        
+        complexity = classifier._analyze_form_complexity(checkbox_form)
+        assert complexity['requires_manual_intervention'] is True
+        assert 'checkboxes' in complexity['complexity_reason']
+        
+        # SCENARIO 3: Form with radio buttons (requires manual intervention)
+        radio_form = '''
+        <form method="post" action="https://example.com/preferences">
+            <input type="radio" name="frequency" value="daily"> Daily
+            <input type="radio" name="frequency" value="weekly"> Weekly
+            <input type="radio" name="frequency" value="monthly"> Monthly
+        </form>
+        '''
+        
+        complexity = classifier._analyze_form_complexity(radio_form)
+        assert complexity['requires_manual_intervention'] is True
+        assert 'radio_buttons' in complexity['complexity_reason']
+        
+        # SCENARIO 4: Form with select dropdown (requires manual intervention)
+        select_form = '''
+        <form method="post" action="https://example.com/preferences">
+            <select name="subscription_type">
+                <option value="all">All emails</option>
+                <option value="important">Important only</option>
+                <option value="none">Unsubscribe all</option>
+            </select>
+        </form>
+        '''
+        
+        complexity = classifier._analyze_form_complexity(select_form)
+        assert complexity['requires_manual_intervention'] is True
+        assert 'multiple_choice_dropdowns' in complexity['complexity_reason']
+        
+        # SCENARIO 5: Form with user choice text (requires manual intervention)
+        choice_form = '''
+        <form method="post" action="https://example.com/preferences">
+            <p>Please select which updates you would like to continue receiving:</p>
+            <input type="hidden" name="user_id" value="123">
+        </form>
+        '''
+        
+        complexity = classifier._analyze_form_complexity(choice_form)
+        assert complexity['requires_manual_intervention'] is True
+        assert 'user_choice_required' in complexity['complexity_reason']
+    
+    def test_manual_intervention_method_classification(self):
+        """Test that complex forms are classified as manual intervention by processors."""
+        from src.email_processor.unsubscribe.processors import UnsubscribeProcessor
+        
+        processor = UnsubscribeProcessor()
+        
+        # Email with complex form (checkboxes)
+        headers = {}
+        html_content = '<form method="post" action="https://example.com/preferences"><input type="checkbox" name="newsletter" value="1"> Keep newsletter<input type="checkbox" name="offers" value="1"> Keep special offers</form>'
+        
+        result = processor.process_email_for_unsubscribe_methods(headers, html_content, None)
+        
+        # Should be classified as manual intervention
+        assert result['primary_method'] is not None
+        assert result['primary_method']['method'] == 'manual_intervention'
+        assert 'checkboxes' in result['primary_method']['complexity_reason']
+        assert result['primary_method']['requires_manual_intervention'] is True
 
 
 class TestUnsubscribeSafetyValidator:

@@ -101,6 +101,13 @@ class BaseUnsubscribeExecutor(ABC):
                 'reason': 'Already unsubscribed'
             }
         
+        # Check if method requires manual intervention
+        if subscription.unsubscribe_method == 'manual_intervention':
+            return {
+                'should_execute': False,
+                'reason': f'Manual intervention required: {subscription.unsubscribe_complexity}'
+            }
+        
         # Check if has unsubscribe link
         if not subscription.unsubscribe_link:
             return {

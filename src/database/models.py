@@ -86,7 +86,8 @@ class Subscription(Base):
     sender_domain = Column(String(255))  # Extracted from sender_email
     subject_pattern = Column(Text)
     unsubscribe_link = Column(Text)
-    unsubscribe_method = Column(String(50))  # http_get, http_post, email_reply, one_click
+    unsubscribe_method = Column(String(50))  # http_get, http_post, email_reply, one_click, manual_intervention
+    unsubscribe_complexity = Column(String(255))  # Reason why manual intervention is required
     list_id = Column(String(255))  # From List-ID header
     frequency = Column(String(50))  # daily, weekly, monthly, irregular
     category = Column(String(100))  # marketing, newsletter, notification, transactional

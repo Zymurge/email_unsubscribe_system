@@ -35,6 +35,7 @@ class UnsubscribeProcessor:
             'http_post': 3,
             'http_get': 2,
             'email_reply': 1,
+            'manual_intervention': 0,  # Lowest priority - requires human action
             'invalid': 0
         }
     
@@ -43,15 +44,8 @@ class UnsubscribeProcessor:
                                             text_content: Optional[str]) -> Dict[str, Any]:
         """Process an email to extract and classify all unsubscribe methods."""
         
-        # Extract all unsubscribe links
+        # Extract all unsubscribe links from headers and body
         all_links = self.extractor.extract_all_unsubscribe_methods(headers, html_content, text_content)
-        
-        if not all_links:
-            return {
-                'methods': [],
-                'primary_method': None,
-                'total_methods': 0
-            }
         
         # Also look for form-based unsubscribe methods in HTML
         if html_content:
@@ -61,11 +55,41 @@ class UnsubscribeProcessor:
         # Remove duplicates while preserving order
         all_links = list(dict.fromkeys(all_links))
         
+        if not all_links:
+            return {
+                'methods': [],
+                'primary_method': None,
+                'total_methods': 0
+            }
+        
+        # Remove duplicates while preserving order
+        all_links = list(dict.fromkeys(all_links))
+        
         # Classify each method and validate safety
         methods = []
         for link in all_links:
             # Classify the method
             method_info = self.classifier.classify_method(link, headers, html_content)
+            
+            # Check for form complexity requiring manual intervention
+            if (method_info.get('method') == 'http_post' and 
+                method_info.get('form_complexity', {}).get('requires_manual_intervention', False)):
+                
+                # Reclassify as manual intervention
+                method_info = {
+                    'method': 'manual_intervention',
+                    'url': link,
+                    'original_method': 'http_post',
+                    'complexity_reason': method_info['form_complexity']['complexity_reason'],
+                    'confidence': 'manual_required',
+                    'requires_manual_intervention': True
+                }
+                
+                self.logger.info("Reclassified method as manual intervention due to form complexity", {
+                    'url': link,
+                    'complexity_reason': method_info['complexity_reason'],
+                    'original_method': 'http_post'
+                })
             
             # Validate safety
             safety_check = self.validator.validate_safety(link)
@@ -106,7 +130,9 @@ class UnsubscribeProcessor:
             
             for form in forms:
                 action = form.get('action', '')
-                if action and self.extractor._is_unsubscribe_link(action):
+                if action:
+                    # Extract ALL form action URLs, not just those with unsubscribe keywords
+                    # The classifier will determine if they're actually unsubscribe-related
                     form_urls.append(action)
                     
         except Exception:
@@ -150,6 +176,11 @@ class UnsubscribeProcessor:
             # Update subscription with most recent method (most recent email wins rule)
             subscription.unsubscribe_link = primary_method.get('url', primary_method.get('action_url'))
             subscription.unsubscribe_method = primary_method['method']
+            
+            # Store complexity information for manual intervention methods
+            if primary_method['method'] == 'manual_intervention':
+                subscription.unsubscribe_complexity = primary_method.get('complexity_reason', 'unknown')
+            
             subscription.updated_at = datetime.now()
             
             session.commit()

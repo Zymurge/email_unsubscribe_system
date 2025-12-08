@@ -100,11 +100,14 @@ def list_subscriptions(email, filter_type):
             
             status = f" [{', '.join(status_markers)}]" if status_markers else ""
             
-            click.echo(f"\n  ID: {sub.id}{status}")
+            click.echo(f"  ID: {sub.id}{status}")
             click.echo(f"  From: {sub.sender_email}")
             click.echo(f"  Emails: {sub.email_count}")
             if sub.unsubscribe_method:
-                click.echo(f"  Method: {sub.unsubscribe_method}")
+                method_display = sub.unsubscribe_method
+                if sub.unsubscribe_method == 'manual_intervention' and sub.unsubscribe_complexity:
+                    method_display += f" ({sub.unsubscribe_complexity})"
+                click.echo(f"  Method: {method_display}")
         
         click.echo("\n" + "=" * 80)
 

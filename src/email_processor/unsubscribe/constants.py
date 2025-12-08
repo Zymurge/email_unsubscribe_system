@@ -64,6 +64,7 @@ METHOD_GET = "http_get"
 METHOD_POST = "http_post"
 METHOD_EMAIL = "email_reply"
 METHOD_ONE_CLICK = "one_click"
+METHOD_MANUAL = "manual_intervention"
 
 # Confidence scores for method classification
 CONFIDENCE_HIGH = 1.0

@@ -34,7 +34,9 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
 
 - **Phase 3 (Complete)**: Unsubscribe extraction ✅
   - Extract unsubscribe links from List-Unsubscribe headers and email body
-  - Classify unsubscribe methods (HTTP GET, HTTP POST, Email Reply, One-Click)
+  - Classify unsubscribe methods (HTTP GET, HTTP POST, Email Reply, One-Click, Manual Intervention)
+  - **Form Complexity Detection**: Identifies forms requiring user selections (checkboxes, dropdowns, etc.)
+  - **Manual Intervention Logging**: Logs sites with complex forms that need human handling
   - Safety validation for extracted links
   - Modular architecture with extractors, classifiers, validators, and processors
   - Conflict resolution for multiple unsubscribe methods
@@ -362,6 +364,7 @@ The system uses SQLite with the following main tables:
   - Unsubscribe status and violation monitoring
   - Email count and date tracking
   - **keep_subscription flag**: Users can mark subscriptions to keep (skip unsubscribe)
+  - **unsubscribe_complexity**: Reason why manual intervention is required (for complex forms)
 - **unsubscribe_attempts**: Tracking of unsubscribe operations (Phase 3)
 
 ## Supported Email Providers
