@@ -204,6 +204,7 @@ class SubscriptionDetector:
             'count': len(emails),
             'earliest_date': sorted_emails[0].date_sent,
             'latest_date': sorted_emails[-1].date_sent,
+            'dates': [email.date_sent for email in sorted_emails],  # All dates for pattern analysis
             'subjects': subjects,
             'has_unsubscribe': has_unsubscribe
         }
@@ -235,7 +236,9 @@ class SubscriptionDetector:
         if self._has_marketing_keywords(email_data.get('subjects', [])):
             bonus += 10
         
-        # TODO: Regular pattern bonus (+10) - implement in future iteration
+        # Regular pattern bonus (+10)
+        if self._has_regular_pattern(email_data):
+            bonus += 10
         
         # Cap at 100
         return min(base_score + bonus, 100)
@@ -268,6 +271,60 @@ class SubscriptionDetector:
         
         # Require at least 2 different weak marketing terms
         return len(unique_weak_terms) >= 2
+    
+    def _has_regular_pattern(self, email_data: Dict[str, Any]) -> bool:
+        """Check if emails follow a regular pattern (daily, weekly, monthly)."""
+        dates = email_data.get('dates', [])
+        if len(dates) < 3:
+            return False  # Need at least 3 emails to detect a pattern
+        
+        # Calculate intervals between consecutive emails
+        intervals_days = []
+        for i in range(1, len(dates)):
+            interval = (dates[i] - dates[i-1]).total_seconds() / (24 * 3600)
+            intervals_days.append(interval)
+        
+        if not intervals_days:
+            return False
+        
+        # Calculate average interval
+        avg_interval = sum(intervals_days) / len(intervals_days)
+        
+        # Calculate variance to check consistency
+        variance = sum((interval - avg_interval) ** 2 for interval in intervals_days) / len(intervals_days)
+        std_dev = variance ** 0.5
+        
+        # Allow some tolerance (±20% of average interval, but at least 0.5 days)
+        tolerance = max(0.5, avg_interval * 0.2)
+        
+        # Check if all intervals are within tolerance of the average
+        consistent = all(abs(interval - avg_interval) <= tolerance for interval in intervals_days)
+        
+        if not consistent:
+            return False
+        
+        # Check for common regular patterns
+        # Daily: ~1 day intervals
+        if 0.8 <= avg_interval <= 1.2:
+            return True
+        
+        # Weekly: ~7 day intervals  
+        if 6.5 <= avg_interval <= 7.5:
+            return True
+            
+        # Bi-weekly: ~14 day intervals
+        if 13 <= avg_interval <= 15:
+            return True
+            
+        # Monthly: ~30 day intervals
+        if 27 <= avg_interval <= 33:
+            return True
+            
+        # Bi-monthly: ~60 day intervals
+        if 55 <= avg_interval <= 65:
+            return True
+        
+        return False
     
     def _extract_sender_domain(self, sender_email: str) -> str:
         """Extract full domain from sender email."""

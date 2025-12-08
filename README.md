@@ -26,7 +26,7 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
 
 - **Phase 2 (Complete)**: Subscription detection ✅
   - Intelligent subscription detection from email patterns
-  - Deterministic confidence scoring (15-100 scale)
+  - Deterministic confidence scoring (15-100 scale) with regular pattern bonus
   - Marketing keyword detection with word boundaries
   - Full domain extraction and sender analysis
   - Data validation and graceful error handling
@@ -357,7 +357,7 @@ The system uses SQLite with the following main tables:
   - Links to subscriptions via `sender_email` and `account_id` (no direct foreign key)
   - Fields include: `sender_email`, `date_sent`, `uid`, `message_id`
 - **subscriptions**: Detected subscriptions with confidence scoring and violation tracking
-  - Confidence scoring (15-100 scale via `confidence_score` field)
+  - Confidence scoring (15-100 scale via `confidence_score` field) with bonuses for unsubscribe info, marketing keywords, and regular patterns
   - Marketing keyword detection
   - Unsubscribe status and violation monitoring
   - Email count and date tracking

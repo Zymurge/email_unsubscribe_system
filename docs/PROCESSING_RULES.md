@@ -47,6 +47,7 @@ Base Score Calculation:
 - Marketing keyword bonus: 10 points per keyword found
 - Unsubscribe header bonus: 15 points if List-Unsubscribe header present
 - Unsubscribe link bonus: 10 points if unsubscribe links in body
+- Regular pattern bonus: 10 points if emails arrive at regular intervals (daily/weekly/monthly)
 - Domain consistency bonus: 5 points if sender domain matches
 - Total cap: 100 points maximum
 
@@ -55,6 +56,15 @@ Base Score Calculation:
 - **Keywords**: "sale", "offer", "discount", "deal", "promotion", "coupon", "savings", "free shipping", "limited time", "newsletter", "marketing", "advertisement"
 - **Matching**: Use word boundaries (`\b`) to prevent partial matches
 - **Case Insensitive**: Keywords matched regardless of case
+
+### Regular Pattern Detection
+
+- **Purpose**: Identify legitimate subscriptions that send emails at predictable intervals
+- **Patterns Detected**: Daily (~1 day), Weekly (~7 days), Bi-weekly (~14 days), Monthly (~30 days), Bi-monthly (~60 days)
+- **Algorithm**: Analyzes intervals between consecutive emails for consistency within tolerance
+- **Tolerance**: ±20% of average interval, minimum 0.5 days
+- **Requirement**: At least 3 emails needed for pattern detection
+- **Bonus**: +10 confidence points for regular patterns
 
 ### Subscription Creation Rules
 

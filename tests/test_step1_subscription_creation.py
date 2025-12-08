@@ -70,8 +70,8 @@ class TestSubscriptionDetection:
             assert subscription.email_count == 3
             assert subscription.discovered_at == datetime(2024, 1, 1, 10, 0, 0)
             assert subscription.last_seen == datetime(2024, 1, 3, 10, 0, 0)
-            # 3 emails (35 points) + unsubscribe header (15 points) = 50
-            assert subscription.confidence_score == 50
+            # 3 emails (35 points) + unsubscribe header (15 points) + regular pattern (10 points) = 60
+            assert subscription.confidence_score == 60
     
     def test_create_multiple_subscriptions_different_senders(self):
         """Create separate subscriptions for different senders."""
@@ -241,7 +241,7 @@ class TestSubscriptionDetection:
             }
             
             assert confidence_by_sender["single@test.com"] == 15
-            assert confidence_by_sender["unsub@test.com"] == 50
+            assert confidence_by_sender["unsub@test.com"] == 60
             assert confidence_by_sender["marketing@test.com"] == 100
     
     def test_skip_emails_with_insufficient_data(self):
@@ -432,8 +432,8 @@ class TestSubscriptionDetection:
             subscription = subscriptions[0]
             assert subscription.email_count == 4  # 1 initial + 3 new
             assert subscription.last_seen == datetime(2024, 1, 4, 10, 0, 0)
-            # 4 emails (55 points) + unsubscribe header (15 points) = 70
-            assert subscription.confidence_score == 70
+            # 4 emails (55 points) + unsubscribe header (15 points) + regular pattern (10 points) = 80
+            assert subscription.confidence_score == 80
     
     def test_integration_with_existing_violations(self):
         """Integration with existing violation tracking."""
@@ -511,6 +511,94 @@ class TestSubscriptionDetection:
             assert existing_subscription.emails_after_unsubscribe == 3
             assert existing_subscription.violation_count == 2
             assert existing_subscription.last_violation_at == datetime(2024, 1, 15, 10, 0, 0)
+
+
+class TestRegularPatternBonus:
+    """Test regular pattern detection for confidence scoring bonus."""
+    
+    def test_regular_weekly_pattern_bonus(self):
+        """Apply +10 bonus for emails arriving at regular weekly intervals."""
+        db_manager = DatabaseManager("sqlite:///:memory:")
+        db_manager.initialize_database()
+        
+        with db_manager.get_session() as session:
+            account = Account(email_address="test@example.com", provider="test")
+            session.add(account)
+            session.commit()
+            session.refresh(account)
+            
+            # Create 4 emails at regular weekly intervals (every 7 days)
+            base_date = datetime(2024, 1, 1, 10, 0, 0)
+            weekly_emails = [
+                EmailMessage(
+                    account_id=account.id,
+                    message_id=f"weekly-{i}",
+                    uid=100 + i,
+                    sender_email="weekly@newsletter.com",
+                    subject="Weekly Update",
+                    date_sent=base_date + timedelta(days=i*7),  # 0, 7, 14, 21 days
+                    has_unsubscribe_header=True
+                )
+                for i in range(4)  # 4 emails
+            ]
+            session.add_all(weekly_emails)
+            session.commit()
+            
+            from src.email_processor.subscription_detector import SubscriptionDetector
+            detector = SubscriptionDetector()
+            detector.detect_subscriptions_from_emails(account.id, session)
+            
+            # Verify regular pattern bonus applied: 55 (base for 4 emails) + 15 (unsub) + 10 (marketing) + 10 (regular) = 90
+            subscription = session.query(Subscription).filter(
+                Subscription.sender_email == "weekly@newsletter.com"
+            ).first()
+            
+            assert subscription.confidence_score == 90
+    
+    def test_irregular_pattern_no_bonus(self):
+        """No bonus for emails with irregular arrival patterns."""
+        db_manager = DatabaseManager("sqlite:///:memory:")
+        db_manager.initialize_database()
+        
+        with db_manager.get_session() as session:
+            account = Account(email_address="test@example.com", provider="test")
+            session.add(account)
+            session.commit()
+            session.refresh(account)
+            
+            # Create 4 emails at irregular intervals (not regular pattern)
+            irregular_dates = [
+                datetime(2024, 1, 1, 10, 0, 0),   # Day 0
+                datetime(2024, 1, 3, 10, 0, 0),   # Day 2 (irregular)
+                datetime(2024, 1, 8, 10, 0, 0),   # Day 7 (irregular)
+                datetime(2024, 1, 15, 10, 0, 0),  # Day 14 (irregular)
+            ]
+            
+            irregular_emails = [
+                EmailMessage(
+                    account_id=account.id,
+                    message_id=f"irregular-{i}",
+                    uid=200 + i,
+                    sender_email="irregular@newsletter.com",
+                    subject="Update",
+                    date_sent=date,
+                    has_unsubscribe_header=True
+                )
+                for i, date in enumerate(irregular_dates)
+            ]
+            session.add_all(irregular_emails)
+            session.commit()
+            
+            from src.email_processor.subscription_detector import SubscriptionDetector
+            detector = SubscriptionDetector()
+            detector.detect_subscriptions_from_emails(account.id, session)
+            
+            # Verify no regular pattern bonus: 55 (base for 4 emails) + 15 (unsub) = 70
+            subscription = session.query(Subscription).filter(
+                Subscription.sender_email == "irregular@newsletter.com"
+            ).first()
+            
+            assert subscription.confidence_score == 70
 
 
 if __name__ == '__main__':
