@@ -42,13 +42,6 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Conflict resolution for multiple unsubscribe methods
   - Comprehensive test coverage (140+ tests)
 
-- **Violation Tracking (Complete)**: Unsubscribe monitoring ✅  
-  - Track emails arriving after unsubscribe attempts
-  - Violation counting and timestamp tracking
-  - Comprehensive violation reporting system
-  - Integration with subscription detection
-  - Comprehensive test coverage (7 tests)
-
 - **Phase 4 (Complete)**: Unsubscribe execution ✅
   - Unified base executor class with shared validation and rate limiting
   - HTTP GET executor with comprehensive safety checks
@@ -61,7 +54,7 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Full attempt tracking and database integration
   - Comprehensive test coverage (52 tests: 14 GET + 15 POST + 23 Email)
 
-- **Phase 5 (Complete)**: Email deletion ✅
+- **Phase 5 (Complete)**: Email deletion and cleanup ✅
   - Safely delete pre-unsubscribe emails from IMAP mailbox
   - 6 comprehensive safety checks (unsubscribed status, waiting period, violations, etc.)
   - Preserves post-unsubscribe emails as violation evidence
@@ -69,6 +62,13 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Dry-run mode for preview
   - Two-phase deletion (IMAP then database)
   - Comprehensive test coverage (26 tests)
+
+- **Violation Tracking (Complete)**: Unsubscribe monitoring ✅
+  - Track emails arriving after unsubscribe attempts
+  - Violation counting and timestamp tracking
+  - Comprehensive violation reporting system
+  - Integration with subscription detection
+  - Comprehensive test coverage (7 tests)
 
 ## Installation
 
@@ -380,18 +380,18 @@ The system uses SQLite with the following main tables:
 ### Running Tests
 
 ```bash
-python -m pytest tests/                    # Run all 274 tests
+python -m pytest tests/                    # Run all 341 tests
 python -m pytest tests/test_subscription_matcher.py # Run subscription matcher tests (29 tests)
-python -m pytest tests/test_keep_commands.py # Run keep/unkeep command tests (15 tests)
+python -m pytest tests/test_cli_action.py # Run CLI action command tests (15 tests)
 python -m pytest tests/test_http_get_executor.py # Run HTTP GET executor tests (14 tests)
 python -m pytest tests/test_http_post_executor.py # Run HTTP POST executor tests (15 tests)
 python -m pytest tests/test_email_reply_executor.py # Run Email Reply executor tests (23 tests)
 python -m pytest tests/test_delete_emails.py # Run email deletion tests (26 tests)
-python -m pytest tests/test_credentials.py # Run credential storage tests (24 tests)
+python -m pytest tests/test_config_credentials.py # Run credential storage tests (24 tests)
 python -m pytest tests/test_list_subscriptions.py # Run list-subscriptions tests (12 tests)
-python -m pytest tests/test_violations.py  # Run violation tracking tests  
-python -m pytest tests/test_step1_subscription_creation.py # Run subscription detection tests
-python -m pytest tests/test_phase3_unsubscribe_extraction.py # Run Phase 3 unsubscribe tests (27 tests)
+python -m pytest tests/test_database_violations.py  # Run violation tracking tests
+python -m pytest tests/test_subscription_creation.py # Run subscription detection tests
+python -m pytest tests/test_unsubscribe_extraction.py # Run unsubscribe extraction tests (27 tests)
 ```
 
 ### Project Structure
@@ -425,20 +425,31 @@ email_unsub_manager/
 │   │   ├── http_post_executor.py   # HTTP POST unsubscribe executor (RFC 8058)
 │   │   └── email_reply_executor.py # Email Reply unsubscribe executor (SMTP)
 │   └── utils/           # Utility functions
-├── tests/               # Comprehensive test suite (274 tests)
-│   ├── test_basic.py                        # Basic functionality tests
-│   ├── test_credentials.py                  # Credential storage tests (24 tests)
-│   ├── test_deduplication.py               # Database constraint tests
-│   ├── test_email_reply_executor.py        # Email Reply executor tests (23 tests)
-│   ├── test_http_get_executor.py           # HTTP GET executor tests (14 tests)
-│   ├── test_http_post_executor.py          # HTTP POST executor tests (15 tests)
-│   ├── test_keep_commands.py               # Keep/unkeep command tests (15 tests)
-│   ├── test_keep_subscription_schema.py    # keep_subscription flag tests
-│   ├── test_list_subscriptions.py          # list-subscriptions tests (12 tests)
-│   ├── test_phase3_unsubscribe_extraction.py # Phase 3 unsubscribe tests (27 tests)
-│   ├── test_step1_subscription_creation.py # Subscription detection tests
-│   ├── test_subscription_matcher.py        # Subscription matcher tests (29 tests)
-│   └── test_violations.py                  # Violation tracking tests
+├── tests/               # Comprehensive test suite (341 tests)
+│   ├── test_cli_action.py                     # CLI action command tests (15 tests)
+│   ├── test_cli_error_handling.py            # CLI error handling tests (4 tests)
+│   ├── test_cli_info.py                      # CLI info command tests
+│   ├── test_cli_password.py                  # CLI password command tests
+│   ├── test_cli_simple.py                    # CLI simple command tests
+│   ├── test_config_credentials.py            # Credential storage tests (24 tests)
+│   ├── test_core_dependency_injection.py     # Dependency injection tests
+│   ├── test_database_deduplication.py        # Database constraint tests
+│   ├── test_database_keep_subscription.py    # keep_subscription flag tests
+│   ├── test_database_models.py               # Basic database model tests
+│   ├── test_database_violations.py           # Violation tracking tests
+│   ├── test_delete_emails.py                 # Email deletion tests (26 tests)
+│   ├── test_email_processor_combined_scanner.py # Combined scanner tests
+│   ├── test_email_reply_executor.py          # Email Reply executor tests (23 tests)
+│   ├── test_http_get_executor.py             # HTTP GET executor tests (14 tests)
+│   ├── test_http_post_executor.py            # HTTP POST executor tests (15 tests)
+│   ├── test_list_subscriptions.py            # list-subscriptions tests (12 tests)
+│   ├── test_logging.py                       # Logging functionality tests
+│   ├── test_quoted_printable_unwrap.py       # Quoted printable decoding tests
+│   ├── test_subscription_creation.py         # Subscription creation tests
+│   ├── test_subscription_creation_spec.py    # Subscription creation specification tests
+│   ├── test_subscription_matcher.py          # Subscription matcher tests (29 tests)
+│   ├── test_type_safety.py                   # Type safety and validation tests
+│   └── test_unsubscribe_extraction.py        # Unsubscribe extraction tests (27 tests)
 ├── docs/                # Documentation
 │   └── PROCESSING_RULES.md # Detailed unsubscribe extraction rules
 ├── data/                # Database and data files (created automatically)
@@ -475,13 +486,13 @@ email_unsub_manager/
   - [x] Interactive CLI command with confirmations
   - [x] Full attempt tracking and database integration
   - [x] Full TDD methodology with 52 comprehensive tests (14 GET + 15 POST + 23 Email)
-- [ ] **Phase 5**: Email deletion and cleanup
-  - [ ] Delete old marketing emails after successful unsubscribe
-  - [ ] Multiple safety checks (waiting period, no violations, not kept)
-  - [ ] Preserve post-unsubscribe emails (violation evidence)
-  - [ ] Strong confirmation requirements
-  - [ ] Dry-run preview mode
-  - [ ] Two-phase deletion (IMAP + database)
-  - [ ] TDD methodology with comprehensive test coverage
+- [x] **Phase 5**: Email deletion and cleanup ✅ **COMPLETE**
+  - [x] Delete old marketing emails after successful unsubscribe
+  - [x] Multiple safety checks (waiting period, no violations, not kept)
+  - [x] Preserve post-unsubscribe emails (violation evidence)
+  - [x] Strong confirmation requirements
+  - [x] Dry-run preview mode
+  - [x] Two-phase deletion (IMAP + database)
+  - [x] TDD methodology with comprehensive test coverage (26 tests)
 - [ ] **Phase 6**: Web interface and reporting
 - [ ] **Phase 7**: OAuth support for major providers
