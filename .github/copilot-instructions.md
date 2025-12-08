@@ -11,13 +11,14 @@
 - This is a TDD (Test-Driven Development) project
 - All new features should follow Red-Green-Refactor cycle
 - Test suite uses pytest
-- Current test count: 274 tests (all passing)
+- Current test count: 341 tests (all passing)
 
 ## Development Practices
 
 - Follow the existing code structure in `src/` directory
 - Database operations use SQLAlchemy ORM
-- CLI commands are in `main.py` with sys.argv parsing (not Click)
+- CLI commands use Click framework (not sys.argv parsing)
+- To access the DB directly, always use sqlite3 and query directly
 - Always run tests after making changes: `python -m pytest tests/ --tb=no -q`
 
 ## Code Style

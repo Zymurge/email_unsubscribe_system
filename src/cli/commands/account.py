@@ -29,6 +29,10 @@ PROVIDER_SETTINGS = {
     'icloud': {
         'imap_server': 'imap.mail.me.com',
         'imap_port': 993
+    },
+    'comcast': {
+        'imap_server': 'imap.comcast.net',
+        'imap_port': 993
     }
 }
 
@@ -45,6 +49,8 @@ def detect_provider(email: str) -> str:
         return 'yahoo'
     elif 'icloud.com' in domain or 'me.com' in domain or 'mac.com' in domain:
         return 'icloud'
+    elif 'comcast.net' in domain:
+        return 'comcast'
     
     return 'custom'
 

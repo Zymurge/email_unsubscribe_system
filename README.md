@@ -123,10 +123,21 @@ py main.py init
 ### Add Email Account
 
 ```bash
-py main.py add-account user@comcast.net
+py main.py account add user@comcast.net
+py main.py account add user@custom.com --imap-server mail.custom.com --provider custom
 ```
 
-### Store Credentials
+**Supported Providers** (auto-detected from email domain):
+- Gmail (`imap.gmail.com`)
+- Outlook/Hotmail (`outlook.office365.com`) 
+- Yahoo (`imap.mail.yahoo.com`)
+- iCloud (`imap.mail.me.com`)
+- Comcast (`imap.comcast.net`)
+
+**Options:**
+- `--provider`: Override auto-detected provider
+- `--imap-server`: IMAP server address (required for custom providers)
+- `--imap-port`: IMAP port (default: 993)
 
 Store passwords securely to avoid repeated prompts:
 
@@ -141,7 +152,7 @@ py main.py list-passwords
 py main.py remove-password user@comcast.net
 ```
 
-**Note**: Stored credentials are saved in `data/email_passwords.json` with restrictive file permissions (600). When running commands that require passwords (scan, add-account, etc.), the system automatically uses stored credentials if available.
+**Note**: Stored credentials are saved in `data/email_passwords.json` with restrictive file permissions (600). When running commands that require passwords (scan, account add, etc.), the system automatically uses stored credentials if available.
 
 ### Scan Account for Messages
 
@@ -154,7 +165,7 @@ py main.py scan 1 30 1000   # Scan last 30 days, limit to 1000 messages
 ### List Accounts
 
 ```bash
-py main.py list-accounts
+py main.py account list
 ```
 
 ### View Account Statistics
