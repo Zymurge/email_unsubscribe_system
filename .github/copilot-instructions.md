@@ -11,7 +11,7 @@
 - This is a TDD (Test-Driven Development) project
 - All new features should follow Red-Green-Refactor cycle
 - Test suite uses pytest
-- Current test count: 248 tests (all passing)
+- Current test count: 274 tests (all passing)
 
 ## Development Practices
 
