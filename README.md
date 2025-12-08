@@ -128,13 +128,15 @@ py main.py account add user@custom.com --imap-server mail.custom.com --provider 
 ```
 
 **Supported Providers** (auto-detected from email domain):
+
 - Gmail (`imap.gmail.com`)
-- Outlook/Hotmail (`outlook.office365.com`) 
+- Outlook/Hotmail (`outlook.office365.com`)
 - Yahoo (`imap.mail.yahoo.com`)
 - iCloud (`imap.mail.me.com`)
 - Comcast (`imap.comcast.net`)
 
 **Options:**
+
 - `--provider`: Override auto-detected provider
 - `--imap-server`: IMAP server address (required for custom providers)
 - `--imap-port`: IMAP port (default: 993)
@@ -322,7 +324,7 @@ py main.py delete-emails 42 --waiting-days 14
 
 **Example Output:**
 
-```
+```text
 WARNING: This will permanently delete emails from your mailbox!
 
 Subscription: newsletters@example.com (ID: 42)

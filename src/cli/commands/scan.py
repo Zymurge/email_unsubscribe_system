@@ -94,7 +94,7 @@ def scan_analyze(email, limit):
         try:
             if limit:
                 scanned, analyzed = scanner.scan_account_with_analysis(
-                    account.id, password, max_messages=limit
+                    account.id, password, limit=limit
                 )
             else:
                 scanned, analyzed = scanner.scan_account_with_analysis(account.id, password)
