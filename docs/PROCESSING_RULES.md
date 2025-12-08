@@ -1,11 +1,13 @@
 # Email Subscription Manager - Processing Rules Documentation
 
-**Version**: Phase 3 (November 2025)  
+**Version**: Phase 5 (December 2025)  
 **Purpose**: Comprehensive business logic rules enforced by the test suite
 
 ## Overview
 
-This document defines all processing rules and business logic for the Email Subscription Manager across all three phases. These rules are enforced through Test-Driven Development (TDD) and validated by automated tests.
+This document defines all processing rules and business logic for the Email Subscription Manager across all five phases. These rules are enforced through Test-Driven Development (TDD) and validated by automated tests.
+
+**Architecture Note**: Phase 4 executors use a unified BaseUnsubscribeExecutor class to eliminate code duplication and ensure consistent validation, rate limiting, and attempt tracking across all execution methods (HTTP GET, HTTP POST, Email Reply).
 
 ---
 

@@ -507,7 +507,7 @@ class TestEmailReplyExecutorRateLimiting:
     """Test rate limiting between email sends."""
     
     @patch('src.unsubscribe_executor.email_reply_executor.smtplib.SMTP')
-    @patch('src.unsubscribe_executor.email_reply_executor.time.sleep')
+    @patch('src.unsubscribe_executor.base_executor.time.sleep')
     def test_rate_limiting_with_delay(self, mock_sleep, mock_smtp, session, test_account):
         """Should apply rate limiting between sends."""
         from src.unsubscribe_executor.email_reply_executor import EmailReplyExecutor
@@ -588,6 +588,11 @@ class TestEmailReplyExecutorDryRun:
         mock_smtp.assert_not_called()
         
         # Verify database NOT updated in dry-run
+        from src.database.models import UnsubscribeAttempt
+        attempts = session.query(UnsubscribeAttempt).filter_by(
+            subscription_id=subscription.id
+        ).all()
+        assert len(attempts) == 0  # No attempts recorded in dry-run
         session.refresh(subscription)
         assert subscription.unsubscribed_at is None
         

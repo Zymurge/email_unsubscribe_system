@@ -4,13 +4,15 @@ A Python tool to scan email accounts, detect subscriptions, and manage unsubscri
 
 ## Architecture
 
-The system is built with three main phases:
+The system is built with five main phases:
 
 1. **Email Collection** ✅: Scan email accounts via IMAP and store messages in SQLite
-2. **Subscription Detection** ✅: Analyze stored emails to identify subscriptions with confidence scoring  
-3. **Unsubscribe Processing**: Extract and process unsubscribe links (planned for Phase 3)
+2. **Subscription Detection** ✅: Analyze stored emails to identify subscriptions with confidence scoring
+3. **Unsubscribe Extraction** ✅: Extract and classify unsubscribe methods from email headers and body content
+4. **Unsubscribe Execution** ✅: Execute unsubscribe requests via HTTP GET/POST or email reply (unified executor architecture)
+5. **Email Deletion** ✅: Safely delete pre-unsubscribe emails with comprehensive safety checks
 
-The system uses Test-Driven Development (TDD) methodology with comprehensive test coverage across all components.
+The system uses Test-Driven Development (TDD) methodology with comprehensive test coverage across all components. The executor layer uses a unified base class pattern to eliminate code duplication and ensure consistent validation, rate limiting, and attempt tracking across all unsubscribe methods.
 
 ## Features
 
@@ -30,6 +32,14 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Data validation and graceful error handling
   - Comprehensive test coverage (8 tests)
 
+- **Phase 3 (Complete)**: Unsubscribe extraction ✅
+  - Extract unsubscribe links from List-Unsubscribe headers and email body
+  - Classify unsubscribe methods (HTTP GET, HTTP POST, Email Reply, One-Click)
+  - Safety validation for extracted links
+  - Modular architecture with extractors, classifiers, validators, and processors
+  - Conflict resolution for multiple unsubscribe methods
+  - Comprehensive test coverage (140+ tests)
+
 - **Violation Tracking (Complete)**: Unsubscribe monitoring ✅  
   - Track emails arriving after unsubscribe attempts
   - Violation counting and timestamp tracking
@@ -38,6 +48,7 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Comprehensive test coverage (7 tests)
 
 - **Phase 4 (Complete)**: Unsubscribe execution ✅
+  - Unified base executor class with shared validation and rate limiting
   - HTTP GET executor with comprehensive safety checks
   - HTTP POST executor with RFC 8058 compliance (List-Unsubscribe=One-Click header)
   - Email Reply executor with SMTP sending
@@ -47,6 +58,15 @@ The system uses Test-Driven Development (TDD) methodology with comprehensive tes
   - Interactive CLI command with confirmations
   - Full attempt tracking and database integration
   - Comprehensive test coverage (52 tests: 14 GET + 15 POST + 23 Email)
+
+- **Phase 5 (Complete)**: Email deletion ✅
+  - Safely delete pre-unsubscribe emails from IMAP mailbox
+  - 6 comprehensive safety checks (unsubscribed status, waiting period, violations, etc.)
+  - Preserves post-unsubscribe emails as violation evidence
+  - Strong confirmation requirements (no --yes flag)
+  - Dry-run mode for preview
+  - Two-phase deletion (IMAP then database)
+  - Comprehensive test coverage (26 tests)
 
 ## Installation
 

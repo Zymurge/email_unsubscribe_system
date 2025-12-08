@@ -2,26 +2,25 @@
 Email Reply Unsubscribe Executor
 
 Handles unsubscribe execution via email reply (mailto: links) with:
-- Comprehensive safety validations
+- Comprehensive safety validations (inherited from base)
 - SMTP email sending
-- Rate limiting
-- Success/failure tracking
-- Dry-run mode support
+- Rate limiting (inherited from base)
+- Success/failure tracking (inherited from base)
+- Dry-run mode support (inherited from base)
 """
 
-import time
 import smtplib
 import socket
-from datetime import datetime
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse, parse_qs, unquote
 from email.mime.text import MIMEText
 from sqlalchemy.orm import Session
 
-from src.database.models import Subscription, UnsubscribeAttempt
+from src.database.models import Subscription
+from .base_executor import BaseUnsubscribeExecutor
 
 
-class EmailReplyExecutor:
+class EmailReplyExecutor(BaseUnsubscribeExecutor):
     """Execute unsubscribe requests via email reply method."""
     
     def __init__(
@@ -50,71 +49,97 @@ class EmailReplyExecutor:
             rate_limit_seconds: Delay in seconds between email sends
             dry_run: If True, simulate without actual execution
         """
-        self.session = session
+        super().__init__(session, max_attempts, timeout, rate_limit_seconds, dry_run)
         self.email_address = email_address
         self.email_password = email_password
         self.smtp_host = smtp_host
         self.smtp_port = smtp_port
-        self.max_attempts = max_attempts
-        self.timeout = timeout
-        self.rate_limit_seconds = rate_limit_seconds
-        self.dry_run = dry_run
-        self._last_request_time: Optional[float] = None
     
-    def should_execute(self, subscription: Subscription) -> Dict[str, Any]:
+    @property
+    def method_name(self) -> str:
+        """Return the method name for this executor."""
+        return 'email_reply'
+    
+    def should_execute(self, subscription_or_id):
         """
         Check if subscription should be processed for unsubscribe.
         
+        Supports both interfaces for backward compatibility:
+        - should_execute(subscription_id: int) - standard interface
+        - should_execute(subscription: Subscription) - legacy interface
+        
         Args:
-            subscription: Subscription to check
+            subscription_or_id: Either subscription ID (int) or Subscription object
             
         Returns:
             Dict with 'should_execute' (bool) and 'reason' (str)
         """
-        # Check if marked to keep
-        if subscription.keep_subscription:
-            return {
-                'should_execute': False,
-                'reason': 'Subscription marked to keep (skip unsubscribe)'
-            }
+        # Handle both subscription object and subscription_id
+        if isinstance(subscription_or_id, Subscription):
+            # Legacy interface - use object's ID
+            subscription_id = subscription_or_id.id
+        else:
+            # Standard interface
+            subscription_id = subscription_or_id
         
-        # Check if already unsubscribed
-        if subscription.unsubscribe_status == 'unsubscribed':
-            return {
-                'should_execute': False,
-                'reason': 'Already unsubscribed'
-            }
+        # Call base class implementation
+        return super().should_execute(subscription_id)
+    
+    def execute(self, subscription_or_id):
+        """
+        Execute unsubscribe via email reply.
         
-        # Check if has unsubscribe link
-        if not subscription.unsubscribe_link:
-            return {
-                'should_execute': False,
-                'reason': 'No unsubscribe link available'
-            }
+        Supports both interfaces for backward compatibility:
+        - execute(subscription_id: int) - standard interface
+        - execute(subscription: Subscription) - legacy interface
         
-        # Check if method matches (must be email_reply)
-        if subscription.unsubscribe_method != 'email_reply':
-            return {
-                'should_execute': False,
-                'reason': f'Method mismatch: {subscription.unsubscribe_method} (expected email_reply)'
-            }
+        Args:
+            subscription_or_id: Either subscription ID (int) or Subscription object
+            
+        Returns:
+            Dict with execution result
+        """
+        # Handle both subscription object and subscription_id
+        if isinstance(subscription_or_id, Subscription):
+            # Legacy interface - subscription object passed directly
+            subscription = subscription_or_id
+            subscription_id = subscription.id
+        else:
+            # Standard interface - subscription_id passed
+            subscription_id = subscription_or_id
+            subscription = self.session.query(Subscription).filter_by(
+                id=subscription_id
+            ).first()
+            
+            if not subscription:
+                return {
+                    'success': False,
+                    'error_message': 'Subscription not found'
+                }
         
-        # Check attempt count
-        failed_attempts = self.session.query(UnsubscribeAttempt).filter_by(
-            subscription_id=subscription.id,
-            status='failed'
-        ).count()
+        # Apply rate limiting
+        self._apply_rate_limit()
         
-        if failed_attempts >= self.max_attempts:
-            return {
-                'should_execute': False,
-                'reason': f'Max attempts ({self.max_attempts}) reached'
-            }
+        # Perform method-specific execution
+        result = self._perform_execution(subscription)
         
-        return {
-            'should_execute': True,
-            'reason': 'All checks passed'
-        }
+        # Record attempt (skip for dry-run) - base class handles this now
+        if not result.get('dry_run'):
+            self._record_attempt(
+                subscription_id=subscription_id,
+                success=result.get('success', False),
+                response_code=result.get('status_code'),
+                error_message=result.get('error_message')
+            )
+        
+        # Update subscription if successful and not dry-run
+        if result.get('success') and not result.get('dry_run'):
+            from datetime import datetime
+            subscription.unsubscribed_at = datetime.now()
+            subscription.unsubscribe_status = 'unsubscribed'
+            self.session.commit()
+        
+        return result
     
     def _parse_mailto(self, mailto_url: str) -> Dict[str, Optional[str]]:
         """
@@ -184,7 +209,7 @@ class EmailReplyExecutor:
         
         return msg
     
-    def execute(self, subscription: Subscription) -> Dict[str, Any]:
+    def _perform_execution(self, subscription: Subscription) -> Dict[str, Any]:
         """
         Execute unsubscribe via email reply.
         
@@ -199,11 +224,9 @@ class EmailReplyExecutor:
             return {
                 'success': False,
                 'status': 'failed',
-                'message': 'Email credentials not provided'
+                'message': 'Email credentials not provided',
+                'error_message': 'Email credentials not provided'
             }
-        
-        # Apply rate limiting
-        self._apply_rate_limit()
         
         # Parse mailto URL
         mailto_info = self._parse_mailto(subscription.unsubscribe_link)
@@ -212,6 +235,7 @@ class EmailReplyExecutor:
         if self.dry_run:
             return {
                 'success': True,
+                'dry_run': True,
                 'status': 'dry_run',
                 'message': f'DRY RUN: Would send email to {mailto_info["to"]}'
             }
@@ -231,19 +255,6 @@ class EmailReplyExecutor:
                 server.login(self.email_address, self.email_password)
                 server.send_message(msg)
             
-            # Update subscription status
-            subscription.unsubscribed_at = datetime.now()
-            subscription.unsubscribe_status = 'unsubscribed'
-            
-            # Record successful attempt
-            self._record_attempt(
-                subscription=subscription,
-                status='success',
-                message='Successfully sent unsubscribe email'
-            )
-            
-            self.session.commit()
-            
             return {
                 'success': True,
                 'status': 'success',
@@ -252,107 +263,45 @@ class EmailReplyExecutor:
             
         except smtplib.SMTPConnectError as e:
             error_msg = f'SMTP connection error: {str(e)}'
-            self._record_attempt(
-                subscription=subscription,
-                status='failed',
-                message=error_msg
-            )
-            self.session.commit()
-            
             return {
                 'success': False,
                 'status': 'failed',
-                'message': error_msg
+                'message': error_msg,
+                'error_message': error_msg
             }
             
         except smtplib.SMTPAuthenticationError as e:
             error_msg = f'SMTP authentication error: {str(e)}'
-            self._record_attempt(
-                subscription=subscription,
-                status='failed',
-                message=error_msg
-            )
-            self.session.commit()
-            
             return {
                 'success': False,
                 'status': 'failed',
-                'message': error_msg
+                'message': error_msg,
+                'error_message': error_msg
             }
             
         except smtplib.SMTPException as e:
             error_msg = f'SMTP error: {str(e)}'
-            self._record_attempt(
-                subscription=subscription,
-                status='failed',
-                message=error_msg
-            )
-            self.session.commit()
-            
             return {
                 'success': False,
                 'status': 'failed',
-                'message': error_msg
+                'message': error_msg,
+                'error_message': error_msg
             }
             
         except socket.timeout as e:
             error_msg = f'Connection timeout: {str(e)}'
-            self._record_attempt(
-                subscription=subscription,
-                status='failed',
-                message=error_msg
-            )
-            self.session.commit()
-            
             return {
                 'success': False,
                 'status': 'failed',
-                'message': error_msg
+                'message': error_msg,
+                'error_message': error_msg
             }
             
         except Exception as e:
             error_msg = f'Unexpected error: {str(e)}'
-            self._record_attempt(
-                subscription=subscription,
-                status='failed',
-                message=error_msg
-            )
-            self.session.commit()
-            
             return {
                 'success': False,
                 'status': 'failed',
-                'message': error_msg
+                'message': error_msg,
+                'error_message': error_msg
             }
-    
-    def _record_attempt(
-        self,
-        subscription: Subscription,
-        status: str,
-        message: str
-    ) -> None:
-        """
-        Record unsubscribe attempt in database.
-        
-        Args:
-            subscription: Subscription that was processed
-            status: Attempt status ('success' or 'failed')
-            message: Status message or error details
-        """
-        attempt = UnsubscribeAttempt(
-            subscription_id=subscription.id,
-            method_used='email_reply',
-            status=status,
-            error_message=message if status == 'failed' else None,
-            attempted_at=datetime.now()
-        )
-        self.session.add(attempt)
-    
-    def _apply_rate_limit(self) -> None:
-        """Apply rate limiting delay between requests."""
-        if self._last_request_time is not None:
-            elapsed = time.time() - self._last_request_time
-            if elapsed < self.rate_limit_seconds:
-                time.sleep(self.rate_limit_seconds - elapsed)
-        
-        self._last_request_time = time.time()
