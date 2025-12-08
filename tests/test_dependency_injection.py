@@ -86,8 +86,8 @@ class TestEmailScannerDI:
         mock_account.provider = "gmail"
         mock_account.last_scan = datetime(2024, 1, 1)
         
-        # Mock query chain for account lookup
-        mock_session.query.return_value.get.return_value = mock_account
+        # Mock session.get() for account lookup
+        mock_session.get.return_value = mock_account
         
         # Mock query chain for message counts
         mock_session.query.return_value.filter.return_value.count.return_value = 100

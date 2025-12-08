@@ -130,7 +130,7 @@ class UnsubscribeProcessor:
                                            email_date: Optional[datetime] = None) -> Dict[str, Any]:
         """Update subscription with unsubscribe information from email."""
         
-        subscription = session.query(Subscription).get(subscription_id)
+        subscription = session.get(Subscription, subscription_id)
         if not subscription:
             return {'error': 'Subscription not found'}
         
@@ -175,7 +175,7 @@ class UnsubscribeMethodConflictResolver:
                                   email_date: Optional[datetime] = None) -> Dict[str, Any]:
         """Update subscription methods following 'most recent email wins' rule."""
         
-        subscription = self.session.query(Subscription).get(subscription_id)
+        subscription = self.session.get(Subscription, subscription_id)
         if not subscription:
             return {'error': 'Subscription not found'}
         
@@ -206,7 +206,7 @@ class UnsubscribeMethodConflictResolver:
         """Get method change history for a subscription (placeholder for future implementation)."""
         # This would require a separate history table in a full implementation
         # For now, return current method only
-        subscription = self.session.query(Subscription).get(subscription_id)
+        subscription = self.session.get(Subscription, subscription_id)
         if subscription:
             return [{
                 'method': subscription.unsubscribe_method,
@@ -225,7 +225,7 @@ class UnsubscribeMethodUpdater:
     def update_if_better(self, subscription_id: int, new_method: Dict[str, Any]) -> Dict[str, Any]:
         """Update subscription if new method is from more recent email (most recent wins rule)."""
         
-        subscription = self.session.query(Subscription).get(subscription_id)
+        subscription = self.session.get(Subscription, subscription_id)
         if not subscription:
             return {'error': 'Subscription not found'}
         

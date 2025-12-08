@@ -71,7 +71,7 @@ class CombinedEmailScanner:
         Returns:
             Dict with detailed processing results
         """
-        account = self.session.query(Account).get(account_id)
+        account = self.session.get(Account, account_id)
         if not account:
             raise ValueError(f"Account {account_id} not found")
         

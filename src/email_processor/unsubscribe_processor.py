@@ -40,7 +40,7 @@ class UnsubscribeAttemptTracker:
     def create_attempt_if_eligible(self, subscription_id: int) -> Dict[str, Any]:
         """Create unsubscribe attempt only if subscription is eligible."""
         
-        subscription = self.session.query(Subscription).get(subscription_id)
+        subscription = self.session.get(Subscription, subscription_id)
         if not subscription:
             return {
                 'created': False,
@@ -87,7 +87,7 @@ class UnsubscribeAttemptTracker:
                              notes: Optional[str] = None) -> Dict[str, Any]:
         """Update attempt record with success results."""
         
-        attempt = self.session.query(UnsubscribeAttempt).get(attempt_id)
+        attempt = self.session.get(UnsubscribeAttempt, attempt_id)
         if not attempt:
             return {'error': 'Attempt not found'}
         
@@ -116,7 +116,7 @@ class UnsubscribeAttemptTracker:
                              response_headers: Optional[str] = None) -> Dict[str, Any]:
         """Update attempt record with failure results."""
         
-        attempt = self.session.query(UnsubscribeAttempt).get(attempt_id)
+        attempt = self.session.get(UnsubscribeAttempt, attempt_id)
         if not attempt:
             return {'error': 'Attempt not found'}
         

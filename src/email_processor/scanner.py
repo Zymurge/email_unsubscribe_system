@@ -82,7 +82,7 @@ class EmailScanner:
     ) -> Dict[str, int]:
         """Scan an email account for new messages."""
         
-        account = self.session.query(Account).get(account_id)
+        account = self.session.get(Account, account_id)
         if not account:
             raise ValueError(f"Account {account_id} not found")
             
@@ -212,7 +212,7 @@ class EmailScanner:
             
     def get_account_stats(self, account_id: int) -> Dict[str, Any]:
         """Get statistics for an account."""
-        account = self.session.query(Account).get(account_id)
+        account = self.session.get(Account, account_id)
         if not account:
             return {}
             

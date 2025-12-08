@@ -11,7 +11,7 @@ import time
 import re
 from typing import Dict, Any, Optional, List
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 
@@ -68,7 +68,7 @@ class UnsubscribeLogger:
     def _prepare_log_data(self, message: str, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Prepare structured log data with context and filtering."""
         log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'component': self.component,
             'message': self.filter.filter_message(message),
             'context': self.filter.filter_dict(self.context.copy())

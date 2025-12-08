@@ -266,8 +266,8 @@ class TestCombinedScannerIntegration:
     @patch('src.email_processor.combined_scanner.IMAPConnection')
     def test_scan_account_with_analysis_account_not_found(self, mock_imap_conn, mock_get_settings):
         """Test scan when account doesn't exist."""
-        # Mock account query to return None
-        self.mock_session.query.return_value.get.return_value = None
+        # Mock session.get() to return None
+        self.mock_session.get.return_value = None
         
         with pytest.raises(ValueError, match="Account 999 not found"):
             self.scanner.scan_account_with_analysis(999, "password")
@@ -280,7 +280,7 @@ class TestCombinedScannerIntegration:
         mock_account = Mock()
         mock_account.email_address = 'test@example.com'
         mock_account.provider = 'gmail'
-        self.mock_session.query.return_value.get.return_value = mock_account
+        self.mock_session.get.return_value = mock_account
         
         # Mock IMAP settings
         mock_get_settings.return_value = {
