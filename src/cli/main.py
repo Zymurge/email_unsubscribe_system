@@ -14,7 +14,7 @@ from .commands.action import unsubscribe, keep, unkeep, delete_emails
 
 
 @click.group()
-@click.version_option(version='0.5.0', prog_name='Email Subscription Manager')
+@click.version_option(version='0.6.0', prog_name='Email Subscription Manager')
 def cli():
     """
     Email Subscription Manager - Scan, detect, and manage email subscriptions.

@@ -5,6 +5,42 @@ All notable changes to the Email Subscription Manager project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-12-07
+
+### Added - Form Complexity Detection & Manual Intervention Logging ✅ COMPLETE
+
+- **Form Complexity Analysis**
+  - Detects HTML forms requiring user selections (checkboxes, radio buttons, dropdowns)
+  - Identifies user choice text patterns ("select which", "choose", "continue receiving")
+  - Analyzes form structure to determine if manual intervention is required
+
+- **Manual Intervention Classification**
+  - New `manual_intervention` unsubscribe method for complex forms
+  - Reclassifies HTTP POST forms with interactive elements
+  - Prevents automated execution of forms requiring user choices
+  - Stores complexity reasons in database for user awareness
+
+- **Enhanced Logging**
+  - Logs complex forms with detailed complexity reasons
+  - Structured logging for form analysis results
+  - User-friendly display of complexity information in CLI
+
+- **Database Schema Enhancement**
+  - Added `unsubscribe_complexity` field to subscriptions table
+  - Stores reason why manual intervention is required
+  - Backward compatible with existing data
+
+- **Safety Improvements**
+  - Blocks automated unsubscribe attempts for manual intervention methods
+  - Clear error messages explaining why execution was skipped
+  - Preserves user control over complex unsubscribe processes
+
+- **Comprehensive Testing**
+  - Added tests for form complexity detection algorithms
+  - Tests for manual intervention method classification
+  - Tests for CLI display of complexity information
+  - All existing functionality preserved (337+ tests passing)
+
 ## [0.5.0] - 2025-12-04
 
 ### Added - Phase 5: Email Deletion ✅ COMPLETE
