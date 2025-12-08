@@ -48,7 +48,7 @@ def scan(email, limit):
         
         try:
             if limit:
-                count = scanner.scan_account(account.id, password, max_messages=limit)
+                count = scanner.scan_account(account.id, password, limit=limit)
             else:
                 count = scanner.scan_account(account.id, password)
             
